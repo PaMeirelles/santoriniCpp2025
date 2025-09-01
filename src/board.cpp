@@ -330,7 +330,7 @@ bool Board::_player_has_any_valid_move() {
             if (!occupant) { // Standard move to an empty square
                 // A valid move requires a subsequent valid build
                 for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                    if (_blocks[build_sq] < 4 && is_free(build_sq)) {
+                    if (_blocks[build_sq] < 4 && (is_free(build_sq) || build_sq == w_pos)) {
                         return true;
                     }
                 }
