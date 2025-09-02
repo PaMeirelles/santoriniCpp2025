@@ -540,7 +540,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_artemis_moves() const
             }
             for (sq_i second_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (second_sq == from_sq || !_move_checks(to_sq, second_sq) ||
-                    _blocked_by_athena(from_sq, to_sq)) continue;
+                    _blocked_by_athena(to_sq, second_sq)) continue;
                 for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
                     if (_build_ok(from_sq, second_sq, build_sq)) {
                         moves.push_back(std::make_unique<Moves::ArtemisMove>(from_sq, second_sq, build_sq, to_sq));
