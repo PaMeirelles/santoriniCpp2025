@@ -64,6 +64,7 @@ private:
     bool _build_ok(sq_i from, sq_i to, sq_i build) const;
     bool _complete_checks(sq_i from, sq_i to, sq_i build) const;
     bool _player_has_any_valid_move();
+    bool _blocked_by_athena(int from_sq, int to_sq) const;
 
     // --- God-Specific Logic ---
     void _execute_god_move(const Moves::Move& move);

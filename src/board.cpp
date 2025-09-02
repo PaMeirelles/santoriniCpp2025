@@ -479,13 +479,17 @@ void Board::_undo_apollo(const Moves::ApolloMove& move) {
     }
     _move_worker_back(my_worker_idx, move.from_sq);
 }
+
+bool Board::_blocked_by_athena(const int from_sq, const int to_sq) const {
+    return _prevent_up_next_turn && _blocks[to_sq] > _blocks[from_sq];
+}
 std::vector<std::unique_ptr<Moves::Move>> Board::_generate_apollo_moves() const {
     std::vector<std::unique_ptr<Moves::Move>> moves;
     int start_idx = (_turn == 1) ? 0 : 2;
     for (int i = 0; i < 2; ++i) {
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_prevent_up_next_turn && _blocks[to_sq] > _blocks[from_sq]) continue;
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
             auto occupant = _which_worker_is_here(to_sq);
             if (_blocks[to_sq] == 4 || (occupant && _is_ally_worker(*occupant))) continue;
@@ -527,6 +531,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_artemis_moves() const
     for (int i = 0; i < 2; ++i) {
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             if (!_move_checks(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
@@ -601,6 +606,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_atlas_moves() const {
     for (int i = 0; i < 2; ++i) {
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             if (!_move_checks(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
@@ -641,6 +647,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_demeter_moves() const
     for (int i = 0; i < 2; ++i) {
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             if (!_move_checks(from_sq, to_sq)) continue;
             std::vector<sq_i> build_sqs;
             for(sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
@@ -684,6 +691,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hephaestus_moves() co
     for (int i = 0; i < 2; ++i) {
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             if (!_move_checks(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
@@ -733,6 +741,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hermes_moves() const 
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
             if (!_move_checks(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
+                if (_blocked_by_athena(from_sq, to_sq)) continue;
                 if (_build_ok(from_sq, to_sq, build_sq)) {
                     moves.push_back(std::make_unique<Moves::HermesMove>(from_sq, std::vector<sq_i>{to_sq}, build_sq));
                 }
@@ -823,7 +832,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_minotaur_moves() cons
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
             if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
-            if (_prevent_up_next_turn && _blocks[to_sq] > _blocks[from_sq]) continue;
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
 
             auto occupant = _which_worker_is_here(to_sq);
             if (_blocks[to_sq] == 4 || (occupant && _is_ally_worker(*occupant))) continue;
@@ -867,15 +876,14 @@ void Board::_undo_pan(const Moves::PanMove& move) {
     _move_worker_back(worker_idx, move.from_sq);
     _last_move_height_diff = 0;
 }
-    std::vector<std::unique_ptr<Moves::Move>> Board::_generate_pan_moves() const {
+
+std::vector<std::unique_ptr<Moves::Move>> Board::_generate_pan_moves() const {
     std::vector<std::unique_ptr<Moves::Move>> moves;
     int start_idx = (_turn == 1) ? 0 : 2;
     for (int i = 0; i < 2; ++i) {
        sq_i from_sq = _workers[start_idx + i];
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            // This is the key difference: Pan is affected by the Athena flag.
-            if (_prevent_up_next_turn && _blocks[to_sq] > _blocks[from_sq]) continue;
-
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             if (!_move_checks(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
@@ -915,6 +923,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_prometheus_moves() co
         // Generate moves without pre-build
         for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
             if (!_move_checks(from_sq, to_sq)) continue;
+            if (_blocked_by_athena(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
                     moves.push_back(std::make_unique<Moves::PrometheusMove>(from_sq, to_sq, build_sq));
