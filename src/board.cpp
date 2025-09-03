@@ -98,6 +98,11 @@ namespace Santorini {
 
     _prevent_up_next_turn = (position[53] == '1');
 
+    _workers_map.fill(-1);
+    for (int i=0; i < 4; i++) {
+      _workers_map[_workers[i]] = i;
+    }
+
   }
 
   std::string Board::to_text() const {
@@ -321,48 +326,31 @@ namespace Santorini {
   }
 
   std::optional < int > Board::_which_worker_is_here(sq_i s) const {
-
-    for (int i = 0; i < 4; ++i) {
-
-      if (_workers[i] == s) return i;
-
+    auto oc = _workers_map[s];
+    if (oc == -1) {
+      return std::nullopt;
     }
-
-    return std::nullopt;
-
-  }
+      return oc; // Implicit conversion to std::optional<int> works here
+    }
 
   bool Board::is_free(sq_i s) const {
 
     if (_blocks[s] >= 4) return false;
 
-    for (sq_i w_pos: _workers) {
-
-      if (w_pos == s) return false;
-
-    }
-
-    return true;
+    return _workers_map[s] == -1;
 
   }
 
   void Board::_move_worker(sq_i from, sq_i to) {
+    auto idx = _workers_map[from];
 
-    for (int i = 0; i < 4; ++i) {
+    _xor_hash(Constants::ZOBRIST_WORKERS[from][_player_of_worker(idx)]);
+    _xor_hash(Constants::ZOBRIST_WORKERS[to][_player_of_worker(idx)]);
 
-      if (_workers[i] == from) {
-
-        _xor_hash(Constants::ZOBRIST_WORKERS[from][_player_of_worker(i)]);
-
-        _xor_hash(Constants::ZOBRIST_WORKERS[to][_player_of_worker(i)]);
-
-        _workers[i] = to;
-
-        return;
-
-      }
-
-    }
+    _workers[idx] = to;
+    if (from == to) return;
+    _workers_map[to] = idx;
+    _workers_map[from] = -1;
 
   }
 
@@ -375,6 +363,9 @@ namespace Santorini {
     _xor_hash(Constants::ZOBRIST_WORKERS[original_pos][_player_of_worker(worker_idx)]);
 
     _workers[worker_idx] = original_pos;
+    if (current_pos == original_pos) return;
+    _workers_map[current_pos] = -1;
+    _workers_map[original_pos] = worker_idx;
 
   }
 
@@ -637,11 +628,13 @@ void Board::_execute_god_move(const Moves::Move& move) {
         _xor_hash(Constants::ZOBRIST_WORKERS[move.to_sq][_player_of_worker(*occupant_idx)]);
         _xor_hash(Constants::ZOBRIST_WORKERS[move.from_sq][_player_of_worker(*occupant_idx)]);
         _workers[*occupant_idx] = move.from_sq;
+        _workers_map[move.from_sq] = *occupant_idx;
       }
 
       _xor_hash(Constants::ZOBRIST_WORKERS[move.from_sq][_player_of_worker(my_worker_idx)]);
       _xor_hash(Constants::ZOBRIST_WORKERS[move.to_sq][_player_of_worker(my_worker_idx)]);
       _workers[my_worker_idx] = move.to_sq;
+      _workers_map[move.to_sq] = my_worker_idx;
 
       _inc_block(move.build_sq);
 

@@ -42,6 +42,7 @@ private:
 
 std::array<sq_i, 25> _blocks{};
 std::array<sq_i, 4> _workers{};
+std::array<int, 25> _workers_map{};
 int8_t _turn = 1;
 std::array<Constants::God, 2> _gods{};
 bool _prevent_up_next_turn = false;
