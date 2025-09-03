@@ -92,36 +92,18 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         alpha = stand_pat;
     }
 
-    // Use a simple boolean array for tracking visited squares.
-    // It's much faster than std::set for this purpose.
     bool worker_move_searched[25] = {false};
-    auto moves = search_info.board.generate_moves();
+    auto climber_moves = search_info.board.generate_climber_moves();
 
-    for (auto& move : moves) {
-        // If we've already searched a move for the worker on this starting square, skip.
+    // First, check all climber moves
+    for (auto& move : climber_moves) {
         if (worker_move_searched[move.from_sq]) {
             continue;
         }
 
-        int from_h = search_info.board.get_blocks()[move.from_sq];
-        int to_h = search_info.board.get_blocks()[move.to_sq];
-
-        int god_index = (search_info.board.get_turn() == 1) ? 0 : 1;
-        Constants::God god = search_info.board.get_gods()[god_index];
-
-        bool is_climb = to_h > from_h;
-        bool is_pan_drop = (god == Constants::God::PAN && from_h - to_h >= 2);
-
-        // Only search "non-quiet" moves like climbs or special god moves.
-        if (!(is_climb || is_pan_drop)) {
-            continue;
-        }
-
         search_info.board.make_move(move);
-        // Mark this worker's starting square as searched for this node.
         worker_move_searched[move.from_sq] = true;
         int score = -qsearch(search_info, -beta, -alpha);
-
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
@@ -131,6 +113,29 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         }
         if (score > alpha) {
             alpha = score;
+        }
+    }
+
+    // Then, check for special non-climbing but volatile moves (e.g., Pan drops)
+    int god_index = (search_info.board.get_turn() == 1) ? 0 : 1;
+    Constants::God god = search_info.board.get_gods()[god_index];
+
+    if (god == Constants::God::PAN) {
+        auto quiet_moves = search_info.board.generate_quiet_moves();
+        for (auto& move : quiet_moves) {
+            if (worker_move_searched[move.from_sq]) {
+                continue;
+            }
+            if (search_info.board.get_blocks()[move.from_sq] - search_info.board.get_blocks()[move.to_sq] >= 2) {
+                search_info.board.make_move(move);
+                worker_move_searched[move.from_sq] = true;
+                int score = -qsearch(search_info, -beta, -alpha);
+                search_info.board.unmake_move(move);
+
+                if (search_info.quit) return 0;
+                if (score >= beta) return beta;
+                if (score > alpha) alpha = score;
+            }
         }
     }
 
@@ -171,29 +176,25 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return *tt_score_opt;
     }
 
-    auto moves = search_info.board.generate_moves();
-    if (moves.empty()) {
+    // Use a dedicated check for game over instead of generating all moves upfront.
+    if (!search_info.board.player_has_any_valid_move()) {
         return -MATE + ply;
     }
+
+    auto climber_moves = search_info.board.generate_climber_moves();
+    score_moves(climber_moves, search_info.board);
 
     int max_score = -MATE * 100;
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int original_alpha = alpha;
+    bool beta_cutoff = false;
 
-    score_moves(moves, search_info.board);
-
-    for (size_t i = 0; i < moves.size(); ++i) {
-        pick_move(moves, i);
-        auto& move = moves[i];
-
+    auto process_move_logic = [&](Moves::Move& move) {
         search_info.board.make_move(move);
         int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
         search_info.board.unmake_move(move);
 
-        if (search_info.quit) {
-            search_info.bestMove = nullptr;
-            return 0;
-        }
+        if (search_info.quit) return;
 
         if (curr_score > max_score) {
             max_score = curr_score;
@@ -202,11 +203,34 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                 if (max_score >= beta) {
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-                    return beta;
+                    beta_cutoff = true;
+                    return;
                 }
                 alpha = max_score;
             }
         }
+    };
+
+    for (size_t i = 0; i < climber_moves.size(); ++i) {
+        pick_move(climber_moves, i);
+        process_move_logic(climber_moves[i]);
+        if (beta_cutoff || search_info.quit) break;
+    }
+
+    // Generate and search quiet moves only if no cutoff occurred with climbers.
+    if (!beta_cutoff && !search_info.quit) {
+        auto quiet_moves = search_info.board.generate_quiet_moves();
+        score_moves(quiet_moves, search_info.board);
+        for (size_t i = 0; i < quiet_moves.size(); ++i) {
+            pick_move(quiet_moves, i);
+            process_move_logic(quiet_moves[i]);
+            if (beta_cutoff || search_info.quit) break;
+        }
+    }
+
+    if (search_info.quit) {
+        search_info.bestMove = nullptr;
+        return 0;
     }
 
     search_info.bestMove = std::move(best_move);
@@ -276,3 +300,4 @@ inline std::unique_ptr<Moves::Move> get_best_move(
 }
 
 } // namespace Santorini
+

@@ -54,6 +54,7 @@ add_executable(
         tests/test_unmake_move_tests.cpp
         tests/test_transposition_table.cpp
         tests/test_evaluation.cpp
+        tests/test_climber_quiet.cpp
 )
 
 # Link the test executable against both gtest and your engine library.
