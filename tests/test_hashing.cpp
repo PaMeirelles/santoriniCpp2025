@@ -129,9 +129,9 @@ namespace Santorini {
                 board.make_move(move);
                 board.unmake_move(move);
                 ASSERT_EQ(board.get_hash(), start_hash)
-                    << "Hash mismatch for gods on move " << move.to_text();
+                    << "Hash mismatch for gods on move " << move.to_text(board);
                 ASSERT_EQ(board.to_text(), start_pos)
-                    << "Board state changed after make/unmake on move " << move.to_text();
+                    << "Board state changed after make/unmake on move " << move.to_text(board);
             }
         }
     }
@@ -151,7 +151,7 @@ namespace Santorini {
                 uint64_t rebuilt_hash = rebuilt_board.get_hash();
 
                 ASSERT_EQ(live_hash, rebuilt_hash)
-                    << "Rebuild hash mismatch on move " << move.to_text()
+                    << "Rebuild hash mismatch on move " << move.to_text(board)
                     << "\nLive:    " << live_hash
                     << "\nRebuilt: " << rebuilt_hash;
             }

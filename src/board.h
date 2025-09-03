@@ -10,8 +10,6 @@
 
 namespace Santorini {
 
-
-
 class Board {
 
 public:

@@ -28,7 +28,7 @@ TEST_F(TranspositionTableTest, StoreAndProbe) {
     auto [probed_move, probed_score] = tt.probe(board, 50, 150, depth);
 
     ASSERT_NE(probed_move, nullptr);
-    EXPECT_EQ(probed_move->to_text(), move.to_text());
+    EXPECT_EQ(probed_move->to_text(board), move.to_text(board));
     ASSERT_TRUE(probed_score.has_value());
     EXPECT_EQ(*probed_score, score);
     EXPECT_EQ(tt.hits, 1);
@@ -56,7 +56,7 @@ TEST_F(TranspositionTableTest, ProbePVMove) {
 
     auto [pv_move, pv_score] = tt.probe_pv_move(board);
     ASSERT_NE(pv_move, nullptr);
-    EXPECT_EQ(pv_move->to_text(), move.to_text());
+    EXPECT_EQ(pv_move->to_text(board), move.to_text(board));
     ASSERT_TRUE(pv_score.has_value());
     EXPECT_EQ(*pv_score, 123);
 }
@@ -81,9 +81,9 @@ TEST_F(TranspositionTableTest, ProbePVLine) {
     auto pv_line = tt.probe_pv_line(b1);
 
     ASSERT_EQ(pv_line.size(), 3);
-    EXPECT_EQ(pv_line[0].to_text(), move1.to_text());
-    EXPECT_EQ(pv_line[1].to_text(), move2.to_text());
-    EXPECT_EQ(pv_line[2].to_text(), move3.to_text());
+    EXPECT_EQ(pv_line[0].to_text(board), move1.to_text(board));
+    EXPECT_EQ(pv_line[1].to_text(board), move2.to_text(board));
+    EXPECT_EQ(pv_line[2].to_text(board), move3.to_text(board));
 }
 
 } // namespace Santorini

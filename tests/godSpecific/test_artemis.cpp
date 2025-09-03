@@ -35,4 +35,22 @@ namespace Santorini {
         EXPECT_TRUE(is_move_in_generated_list(board, move));
     }
 
+    TEST(ArtemisTests, to_text_chooses_valid_path) {
+        // This position has a Gray worker on b2. Artemis's to_text() for a move from c3 to b1
+        // should not choose b2 as the intermediate square.
+        Board board = Board("0N1N0N0N0N1N1G0N0N0N0B0N0G0N0N0N0N0N0N0N0N1N0B0N0N0100");
+        using namespace Santorini::Moves;
+
+        // Manually create the move from c3 to b1.
+        sq_i from = text_to_square("c3");
+        sq_i to = text_to_square("b1");
+        sq_i build = text_to_square("a1");
+        Moves::Move artemis_move(from, to, build, Constants::God::ARTEMIS);
+
+
+        // Generate the text representation of the move.
+        std::string move_text = artemis_move.to_text(board);
+        EXPECT_NE(move_text, "c3b2b1a1") << "to_text should not choose an occupied square (b2) for the path";
+    }
+
 } // namespace Santorini

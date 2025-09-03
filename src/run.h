@@ -63,7 +63,7 @@ public:
                 if (!best_move) {
                     std::cout << "bestmove none" << std::endl;
                 } else {
-                    std::cout << "bestmove " << best_move->to_text() << std::endl;
+                    std::cout << "bestmove " << best_move->to_text(*board) << std::endl;
                 }
 
             } else if (command == "quit") {
