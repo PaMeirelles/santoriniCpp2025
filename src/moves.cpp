@@ -4,6 +4,61 @@
 #include <queue>
 
 namespace Santorini::Moves {
+
+    // --- Utility Function Implementations ---
+    inline std::pair<int, int> get_coords(sq_i square) {
+        return { square % 5, square / 5 };
+    }
+
+    bool is_adjacent(sq_i s1, sq_i s2) {
+        if (s1 == s2) return false;
+        auto [r1, c1] = get_coords(s1);
+        auto [r2, c2] = get_coords(s2);
+        return abs(r1 - r2) <= 1 && abs(c1 - c2) <= 1;
+    }
+
+    /**
+     * @brief Finds the shortest path for a Hermes move, considering the board state.
+     *
+     * Uses Breadth-First Search (BFS) to find a shortest sequence of squares on the
+     * same height level, avoiding occupied squares.
+     */
+    std::vector<sq_i> find_hermes_path(sq_i from, sq_i to, const Santorini::Board& board) {
+        if (from == to) {
+            return {};
+        }
+
+        const int8_t start_height = board.get_blocks()[from];
+        std::queue<std::vector<sq_i>> q;
+        q.push({from});
+
+        std::vector<bool> visited(25, false);
+        visited[from] = true;
+
+        while (!q.empty()) {
+            std::vector<sq_i> path = q.front();
+            q.pop();
+            sq_i current = path.back();
+
+            if (current == to) {
+                path.erase(path.begin()); // Remove the 'from' square
+                return path;
+            }
+
+            // Explore neighbors
+            for (sq_i neighbor : Constants::NEIGHBOURS[current]) {
+                // THE FIX: Check board state (free, same height)
+                if (!visited[neighbor] && board.is_free(neighbor) && board.get_blocks()[neighbor] == start_height) {
+                    visited[neighbor] = true;
+                    std::vector<sq_i> new_path = path;
+                    new_path.push_back(neighbor);
+                    q.push(new_path);
+                }
+            }
+        }
+        return {}; // Path not found
+    }
+
     // --- Move::to_text Implementation ---
     std::string Move::to_text(const Santorini::Board& board) const {
         std::string text = square_to_text(from_sq);
@@ -14,7 +69,7 @@ namespace Santorini::Moves {
                 if (!is_adjacent(from_sq, to_sq)) {
                     for (sq_i mid = 0; mid < 25; ++mid) {
                         if (mid != from_sq && mid != to_sq && is_adjacent(from_sq, mid)
-                            && is_adjacent(to_sq, mid) && board.is_free(mid)) { // THE FIX: Check if the square is free
+                            && is_adjacent(to_sq, mid) && board.is_free(mid)) { // Check if the square is free
                             text += square_to_text(mid);
                             break; // Found a valid mid-point
                         }
@@ -25,8 +80,8 @@ namespace Santorini::Moves {
                 break;
 
             case Constants::God::HERMES: {
-                // Hermes pathfinding doesn't need board state as it assumes an empty grid path
-                std::vector<sq_i> path = find_hermes_path(from_sq, to_sq);
+                // THE FIX: Pass the board state to the pathfinding function.
+                std::vector<sq_i> path = find_hermes_path(from_sq, to_sq, board);
                 for (const auto step: path) {
                     text += square_to_text(step);
                 }
@@ -61,3 +116,4 @@ namespace Santorini::Moves {
     }
 
 } // namespace Santorini::Moves
+
