@@ -121,6 +121,7 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         // Mark this worker's starting square as searched for this node.
         worker_move_searched[move.from_sq] = true;
         int score = -qsearch(search_info, -beta, -alpha);
+
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;

@@ -180,19 +180,14 @@ namespace Santorini {
   }
 
   void Board::unmake_move(const Moves::Move & move) {
-
     _turn *= -1;
-
     _xor_hash(Constants::ZOBRIST_TURN);
 
     if (_prevent_up_next_turn != move.had_athena_flag) {
-
       _xor_hash(Constants::ATHENA_EFFECT);
-
     }
 
     _prevent_up_next_turn = move.had_athena_flag;
-
     _won = false;
 
     _undo_god_move(move);
@@ -352,6 +347,26 @@ namespace Santorini {
     _workers_map[to] = idx;
     _workers_map[from] = -1;
 
+  }
+
+  void Board::_swap_workers(sq_i sq1, sq_i sq2) {
+    // 1. Get the indices of the workers at each square.
+    int w1_idx = *_which_worker_is_here(sq1);
+    int w2_idx = *_which_worker_is_here(sq2);
+
+    // 2. Update the Zobrist hash by XORing out old positions and XORing in new ones.
+    _xor_hash(Constants::ZOBRIST_WORKERS[sq1][_player_of_worker(w1_idx)]); // Remove w1 from sq1
+    _xor_hash(Constants::ZOBRIST_WORKERS[sq2][_player_of_worker(w2_idx)]); // Remove w2 from sq2
+    _xor_hash(Constants::ZOBRIST_WORKERS[sq2][_player_of_worker(w1_idx)]); // Add w1 to sq2
+    _xor_hash(Constants::ZOBRIST_WORKERS[sq1][_player_of_worker(w2_idx)]); // Add w2 to sq1
+
+    // 3. Update the source-of-truth _workers array.
+    _workers[w1_idx] = sq2;
+    _workers[w2_idx] = sq1;
+
+    // 4. Update the _workers_map lookup table.
+    _workers_map[sq1] = w2_idx;
+    _workers_map[sq2] = w1_idx;
   }
 
   void Board::_move_worker_back(int worker_idx, sq_i original_pos) {
@@ -620,24 +635,15 @@ void Board::_execute_god_move(const Moves::Move& move) {
 
   switch (move.god) {
     case Constants::God::APOLLO: {
-      int my_worker_idx = *_which_worker_is_here(move.from_sq);
+      auto opponent_idx_opt = _which_worker_is_here(move.to_sq);
 
-      std::optional<int> occupant_idx = _which_worker_is_here(move.to_sq);
-
-      if (occupant_idx.has_value()) {
-        _xor_hash(Constants::ZOBRIST_WORKERS[move.to_sq][_player_of_worker(*occupant_idx)]);
-        _xor_hash(Constants::ZOBRIST_WORKERS[move.from_sq][_player_of_worker(*occupant_idx)]);
-        _workers[*occupant_idx] = move.from_sq;
-        _workers_map[move.from_sq] = *occupant_idx;
+      if (opponent_idx_opt.has_value()) {
+        _swap_workers(move.from_sq, move.to_sq);
+      } else {
+        _move_worker(move.from_sq, move.to_sq);
       }
 
-      _xor_hash(Constants::ZOBRIST_WORKERS[move.from_sq][_player_of_worker(my_worker_idx)]);
-      _xor_hash(Constants::ZOBRIST_WORKERS[move.to_sq][_player_of_worker(my_worker_idx)]);
-      _workers[my_worker_idx] = move.to_sq;
-      _workers_map[move.to_sq] = my_worker_idx;
-
       _inc_block(move.build_sq);
-
       break;
     }
 
@@ -720,13 +726,15 @@ void Board::_undo_god_move(const Moves::Move& move) {
   switch (move.god) {
     case Constants::God::APOLLO: {
       _dec_block(move.build_sq);
-      int my_worker_idx = *_which_worker_is_here(move.to_sq);
-      auto opp_idx = _which_worker_is_here(move.from_sq);
 
-      if (opp_idx && _is_opponent_worker(*opp_idx)) {
-        _move_worker_back(*opp_idx, move.to_sq);
+      auto opponent_idx_opt = _which_worker_is_here(move.from_sq);
+
+      if (opponent_idx_opt.has_value() && _is_opponent_worker(*opponent_idx_opt)) {
+        _swap_workers(move.from_sq, move.to_sq);
+      } else {
+        int my_worker_idx = *_which_worker_is_here(move.to_sq);
+        _move_worker_back(my_worker_idx, move.from_sq);
       }
-      _move_worker_back(my_worker_idx, move.from_sq);
       break;
     }
 

@@ -29,6 +29,7 @@ uint64_t get_hash() const { return _hash; }
 // --- Getters for Evaluation ---
 
 const std::array<sq_i, 4>& get_workers() const { return _workers; }
+const std::array<int, 25>& get_workers_map() const { return _workers_map; }
 const std::array<sq_i, 25>& get_blocks() const { return _blocks; }
 int8_t get_turn() const { return _turn; }
 bool is_free(sq_i s) const;
@@ -60,6 +61,7 @@ bool _is_opponent_worker(int worker_index) const;
 bool _is_ally_worker(int worker_index) const;
 std::optional<int> _which_worker_is_here(sq_i s) const;
 void _move_worker(sq_i from,sq_i to);
+void _swap_workers(sq_i sq1, sq_i sq2);
 void _move_worker_back(int worker_idx,sq_i original_pos);
 void _inc_block(sq_i s);
 void _dec_block(sq_i s);
