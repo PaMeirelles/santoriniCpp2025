@@ -64,4 +64,23 @@ TEST(HermesTests, not_dead_on_h1) {
     EXPECT_EQ(state, 0) << "Hermes can survive by moving to a different horizontal spot and building";
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+
+TEST(HermesTests, to_text_for_stand_still_move) {
+    // In this position, a worker is at b2 (6). A valid move is to
+    // stand still and build at the adjacent c2 (10).
+    Board board("0N0N0N0N0N0N0G1N0N0N1N0B0G0B0N0N1N1N0N0N0N0N0N0N0N0600");
+    using namespace Santorini::Moves;
+
+    // Manually create the move: from b2, to b2, build c2.
+    sq_i from = text_to_square("b2"); // 6
+    Moves::Move hermes_move(from, 10, from, Constants::God::HERMES);
+
+    // Generate the text representation of the move.
+    std::string move_text = hermes_move.to_text(board);
+
+    // The text for a stand-still move should only contain the start and build squares.
+    EXPECT_EQ(move_text, "b2a3b2") << "to_text for a stand-still build should be from_sq + build_sq";
+    EXPECT_NE(move_text, "b2b2") << "to_text should use the build square, not the destination square twice";
+}
 } // namespace Santorini

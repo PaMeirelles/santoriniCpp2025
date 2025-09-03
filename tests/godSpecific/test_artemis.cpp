@@ -53,4 +53,24 @@ namespace Santorini {
         EXPECT_NE(move_text, "c3b2b1a1") << "to_text should not choose an occupied square (b2) for the path";
     }
 
+    TEST(ArtemisTests, to_text_chooses_valid_path_respecting_height) {
+        // In this position, a move from a3 to c3 has two geometric intermediate squares: b3 and b4.
+        // However, moving a3(h=0) -> b4(h=2) is an illegal climb.
+        // The to_text function must choose the valid path via b3(h=0).
+        Board board("0N0N0N1N0N0N1G1N0B0N0B0N2N0N1N1N2N0N0G0N0N0N0N0N0N1010");
+        using namespace Santorini::Moves;
+
+        // Manually create the move from a3 to c3, building at d3.
+        sq_i from = text_to_square("a3");
+        sq_i to = text_to_square("b4");
+        sq_i build = text_to_square("c3");
+        Moves::Move artemis_move(from, to, build, Constants::God::ARTEMIS);
+
+        // Generate the text representation of the move.
+        std::string move_text = artemis_move.to_text(board);
+
+        // Assert that the illegal path via b4 was not chosen.
+        EXPECT_NE(move_text, "a3b4c3") << "to_text should not choose an intermediate square that is too high to climb to.";
+
+    }
 } // namespace Santorini

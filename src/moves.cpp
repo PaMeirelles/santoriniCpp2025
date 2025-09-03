@@ -64,12 +64,22 @@ namespace Santorini::Moves {
         std::string text = square_to_text(from_sq);
 
         switch (god) {
-            case Constants::God::ARTEMIS:
-                // If not a simple adjacent move, find a PLAUSIBLE AND UNOCCUPIED intermediate square.
-                if (!is_adjacent(from_sq, to_sq)) {
+            case Constants::God::ARTEMIS: {
+                // If not a simple adjacent move, find a plausible intermediate square
+                // that respects board state (occupancy and height).
+                auto blocks = board.get_blocks();
+                if (!is_adjacent(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
                     for (sq_i mid = 0; mid < 25; ++mid) {
-                        if (mid != from_sq && mid != to_sq && is_adjacent(from_sq, mid)
-                            && is_adjacent(to_sq, mid) && board.is_free(mid)) { // Check if the square is free
+                        // Check geometry
+                        if (mid == from_sq || mid == to_sq || !is_adjacent(from_sq, mid) || !is_adjacent(to_sq, mid)) {
+                            continue;
+                        }
+                        // Check board state for a valid two-step path
+                        bool is_valid_path = board.is_free(mid) &&
+                                             (blocks[mid] - blocks[from_sq] <= 1) &&
+                                             (blocks[to_sq] - blocks[mid] <= 1);
+
+                        if (is_valid_path) {
                             text += square_to_text(mid);
                             break; // Found a valid mid-point
                         }
@@ -78,14 +88,21 @@ namespace Santorini::Moves {
                 text += square_to_text(to_sq);
                 text += square_to_text(build_sq);
                 break;
+            }
 
             case Constants::God::HERMES: {
-                // THE FIX: Pass the board state to the pathfinding function.
-                std::vector<sq_i> path = find_hermes_path(from_sq, to_sq, board);
-                for (const auto step: path) {
-                    text += square_to_text(step);
+                auto blocks = board.get_blocks();
+                if (!is_adjacent(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
+                    std::vector<sq_i> path = find_hermes_path(from_sq, to_sq, board);
+                    for (const auto step: path) {
+                        text += square_to_text(step);
+                    }
+                    text += square_to_text(build_sq);
                 }
-                text += square_to_text(build_sq);
+                else {
+                    text += square_to_text(to_sq);
+                    text += square_to_text(build_sq);
+                }
                 break;
             }
 
