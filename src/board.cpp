@@ -421,11 +421,7 @@ namespace Santorini {
   }
 
   bool Board::_adj_ok(sq_i from, sq_i to) const {
-
-    const auto & neighbours = Constants::NEIGHBOURS[from];
-
-    return std::find(neighbours.begin(), neighbours.end(), to) != neighbours.end();
-
+    return Constants::ADJACENCY_MATRIX[from][to];
   }
 
   std::optional < sq_i > Board::_calculate_push_square(sq_i from_sq, sq_i to_sq) {
