@@ -81,9 +81,9 @@ TEST_F(TranspositionTableTest, ProbePVLine) {
     auto pv_line = tt.probe_pv_line(b1);
 
     ASSERT_EQ(pv_line.size(), 3);
-    EXPECT_EQ(pv_line[0]->to_text(), move1.to_text());
-    EXPECT_EQ(pv_line[1]->to_text(), move2.to_text());
-    EXPECT_EQ(pv_line[2]->to_text(), move3.to_text());
+    EXPECT_EQ(pv_line[0].to_text(), move1.to_text());
+    EXPECT_EQ(pv_line[1].to_text(), move2.to_text());
+    EXPECT_EQ(pv_line[2].to_text(), move3.to_text());
 }
 
 } // namespace Santorini

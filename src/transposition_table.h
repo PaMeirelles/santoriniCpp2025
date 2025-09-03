@@ -8,30 +8,16 @@
 
 namespace Santorini {
 
-inline std::unique_ptr<Moves::Move> clone_move(const Moves::Move& move) {
-    return std::make_unique<Moves::Move>(move);
-}
-
 struct TTEntry {
     uint64_t hash_key;
-    std::unique_ptr<Moves::Move> move;
+    std::optional<Moves::Move> move; // Store move by value for efficiency
     int depth;
     int score;
     char flag; // 'A': upper, 'B': lower, 'E': exact
 
     // Constructor
-    TTEntry(uint64_t key, const Moves::Move& m, int d, int s, char f);
-
-    // --- Rule of Five: Explicitly define move/copy semantics ---
-    // Delete copy constructor and copy assignment
-    TTEntry(const TTEntry&) = delete;
-    TTEntry& operator=(const TTEntry&) = delete;
-
-    // Define move constructor
-    TTEntry(TTEntry&& other) noexcept = default;
-
-    // Define move assignment operator
-    TTEntry& operator=(TTEntry&& other) noexcept = default;
+    TTEntry(uint64_t key, const Moves::Move& m, int d, int s, char f)
+        : hash_key(key), move(m), depth(d), score(s), flag(f) {}
 };
 
 class TranspositionTable {
@@ -45,11 +31,10 @@ public:
 
     explicit TranspositionTable(size_t num_entries = 1 << 22)
         : num_entries(num_entries) {
-        table.resize(num_entries); // Use resize instead of constructor with value
+        table.resize(num_entries);
     }
 
     void clear() {
-        // Replace table.assign with a loop to avoid copy operations.
         for (auto& entry : table) {
             entry.reset();
         }
@@ -78,16 +63,18 @@ public:
         if (entry_opt && entry_opt->hash_key == key && entry_opt->depth >= depth) {
             hits++;
             const TTEntry& entry = *entry_opt;
+            const Moves::Move* move_ptr = entry.move ? &(*entry.move) : nullptr;
+
             if (entry.flag == 'A' && entry.score <= alpha) {
                 cuts++;
-                return {entry.move.get(), alpha};
+                return {move_ptr, alpha};
             }
             if (entry.flag == 'B' && entry.score >= beta) {
                 cuts++;
-                return {entry.move.get(), beta};
+                return {move_ptr, beta};
             }
             if (entry.flag == 'E') {
-                return {entry.move.get(), entry.score};
+                return {move_ptr, entry.score};
             }
         }
         return {nullptr, std::nullopt};
@@ -99,13 +86,14 @@ public:
         const auto& entry_opt = table[index];
 
         if (entry_opt && entry_opt->hash_key == key) {
-            return {entry_opt->move.get(), entry_opt->score};
+            const Moves::Move* move_ptr = entry_opt->move ? &(*entry_opt->move) : nullptr;
+            return {move_ptr, entry_opt->score};
         }
         return {nullptr, std::nullopt};
     }
 
-    std::vector<std::unique_ptr<Moves::Move>> probe_pv_line(Board board) {
-        std::vector<std::unique_ptr<Moves::Move>> pv_line;
+    std::vector<Moves::Move> probe_pv_line(Board board) {
+        std::vector<Moves::Move> pv_line;
         for (int i = 0; i < 10; ++i) { // Limit PV line length to avoid infinite loops
             uint64_t key = board.get_hash();
             size_t index = key % num_entries;
@@ -115,18 +103,11 @@ public:
                 break;
             }
 
-            pv_line.push_back(clone_move(*entry_opt->move));
+            pv_line.push_back(*entry_opt->move);
             board.make_move(*entry_opt->move);
         }
         return pv_line;
     }
 };
-
-
-
-inline TTEntry::TTEntry(uint64_t key, const Moves::Move& m, int d, int s, char f)
-    : hash_key(key), depth(d), score(s), flag(f) {
-    move = clone_move(m);
-}
 
 } // namespace Santorini

@@ -47,21 +47,21 @@ inline int evaluate(const Board& board) {
     return score_position(board) * board.get_turn();
 }
 
-inline void score_moves(std::vector<std::unique_ptr<Moves::Move>>& moves, const Board& board) {
+inline void score_moves(std::vector<Moves::Move> &moves, const Board& board) {
     for (auto& mv : moves) {
-        int from_h = board.get_blocks()[mv->from_sq];
-        int to_h = board.get_blocks()[mv->to_sq()];
-        mv->score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv->to_sq()] - Constants::DOUBLE_NEIGHBORS[mv->from_sq]);
+        int from_h = board.get_blocks()[mv.from_sq];
+        int to_h = board.get_blocks()[mv.to_sq];
+        mv.score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
     }
 }
 
-inline void pick_move(std::vector<std::unique_ptr<Moves::Move>>& moves, size_t start_index) {
+inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
     size_t best_idx = start_index;
-    int best_score = moves[best_idx]->score;
+    int best_score = moves[best_idx].score;
     for (size_t i = start_index + 1; i < moves.size(); ++i) {
-        if (moves[i]->score > best_score) {
+        if (moves[i].score > best_score) {
             best_idx = i;
-            best_score = moves[i]->score;
+            best_score = moves[i].score;
         }
     }
     if (best_idx != start_index) {
@@ -99,12 +99,12 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
 
     for (auto& move : moves) {
         // If we've already searched a move for the worker on this starting square, skip.
-        if (worker_move_searched[move->from_sq]) {
+        if (worker_move_searched[move.from_sq]) {
             continue;
         }
 
-        int from_h = search_info.board.get_blocks()[move->from_sq];
-        int to_h = search_info.board.get_blocks()[move->to_sq()];
+        int from_h = search_info.board.get_blocks()[move.from_sq];
+        int to_h = search_info.board.get_blocks()[move.to_sq];
 
         int god_index = (search_info.board.get_turn() == 1) ? 0 : 1;
         Constants::God god = search_info.board.get_gods()[god_index];
@@ -117,11 +117,11 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
             continue;
         }
 
-        search_info.board.make_move(*move);
+        search_info.board.make_move(move);
         // Mark this worker's starting square as searched for this node.
-        worker_move_searched[move->from_sq] = true;
+        worker_move_searched[move.from_sq] = true;
         int score = -qsearch(search_info, -beta, -alpha);
-        search_info.board.unmake_move(*move);
+        search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
 
@@ -185,9 +185,9 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         pick_move(moves, i);
         auto& move = moves[i];
 
-        search_info.board.make_move(*move);
+        search_info.board.make_move(move);
         int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
-        search_info.board.unmake_move(*move);
+        search_info.board.unmake_move(move);
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
@@ -196,7 +196,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
         if (curr_score > max_score) {
             max_score = curr_score;
-            best_move = clone_move(*move);
+            best_move = std::make_unique<Moves::Move>(move);
             if (max_score > alpha) {
                 if (max_score >= beta) {
                     search_info.bestMove = std::move(best_move);
@@ -260,7 +260,7 @@ inline std::unique_ptr<Moves::Move> get_best_move(
 
         auto [pv_move_ptr, pv_score_opt] = tt.probe_pv_move(board);
         if (pv_move_ptr != nullptr) {
-            best_move = clone_move(*pv_move_ptr);
+            best_move =  std::make_unique<Moves::Move>(*pv_move_ptr);
             if(pv_score_opt.has_value()) prev_score = *pv_score_opt;
         }
 

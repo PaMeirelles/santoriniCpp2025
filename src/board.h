@@ -28,7 +28,7 @@ void make_null_move();
 
 void unmake_null_move(bool prev_prevent_up_flag);
 
-std::vector<std::unique_ptr<Moves::Move>> generate_moves() const;
+std::vector<Moves::Move> generate_moves() const;
 
 int check_state();
 
@@ -124,19 +124,19 @@ bool _blocked_by_athena(int from_sq, int to_sq) const;
 
 void _execute_god_move(const Moves::Move& move);
 void _undo_god_move(const Moves::Move& move);
-std::vector<std::unique_ptr<Moves::Move>> _generate_god_moves() const;
+std::vector<Moves::Move> _generate_god_moves() const;
 
 
-std::vector<std::unique_ptr<Moves::Move>> _generate_apollo_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_artemis_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_athena_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_atlas_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_demeter_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_hephaestus_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_hermes_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_minotaur_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_pan_moves() const;
-std::vector<std::unique_ptr<Moves::Move>> _generate_prometheus_moves() const;
+std::vector<Moves::Move> _generate_apollo_moves() const;
+std::vector<Moves::Move> _generate_artemis_moves() const;
+std::vector<Moves::Move> _generate_athena_moves() const;
+std::vector<Moves::Move> _generate_atlas_moves() const;
+std::vector<Moves::Move> _generate_demeter_moves() const;
+std::vector<Moves::Move> _generate_hephaestus_moves() const;
+std::vector<Moves::Move> _generate_hermes_moves() const;
+std::vector<Moves::Move> _generate_minotaur_moves() const;
+std::vector<Moves::Move> _generate_pan_moves() const;
+std::vector<Moves::Move> _generate_prometheus_moves() const;
 
 
 friend class ApolloTests_swap_up_one_height_Test;

@@ -126,12 +126,12 @@ namespace Santorini {
 
             auto moves = board.generate_moves();
             for (const auto& move : moves) {
-                board.make_move(*move);
-                board.unmake_move(*move);
+                board.make_move(move);
+                board.unmake_move(move);
                 ASSERT_EQ(board.get_hash(), start_hash)
-                    << "Hash mismatch for gods on move " << move->to_text();
+                    << "Hash mismatch for gods on move " << move.to_text();
                 ASSERT_EQ(board.to_text(), start_pos)
-                    << "Board state changed after make/unmake on move " << move->to_text();
+                    << "Board state changed after make/unmake on move " << move.to_text();
             }
         }
     }
@@ -144,14 +144,14 @@ namespace Santorini {
 
             for (const auto& move : moves) {
                 Board test_board(start_pos);
-                test_board.make_move(*move);
+                test_board.make_move(move);
                 uint64_t live_hash = test_board.get_hash();
 
                 Board rebuilt_board(test_board.to_text());
                 uint64_t rebuilt_hash = rebuilt_board.get_hash();
 
                 ASSERT_EQ(live_hash, rebuilt_hash)
-                    << "Rebuild hash mismatch on move " << move->to_text()
+                    << "Rebuild hash mismatch on move " << move.to_text()
                     << "\nLive:    " << live_hash
                     << "\nRebuilt: " << rebuilt_hash;
             }

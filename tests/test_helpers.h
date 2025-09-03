@@ -106,7 +106,7 @@ std::vector<Board> get_stress_scenarios();
         auto legal_moves = board.generate_moves();
 
         for (const auto& legal_move_ptr : legal_moves) {
-            if (*legal_move_ptr == test_move) {
+            if (legal_move_ptr == test_move) {
                 return true;
             }
         }

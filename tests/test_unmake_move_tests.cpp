@@ -67,15 +67,15 @@ TEST(FullUnmakeMoveTests, MakeUnmakeRestoresBoardStateAndHash) {
 
                 auto moves_gray = board_gray.generate_moves();
                 for (const auto& move : moves_gray) {
-                    board_gray.make_move(*move);
-                    board_gray.unmake_move(*move);
+                    board_gray.make_move(move);
+                    board_gray.unmake_move(move);
                     ASSERT_EQ(board_gray.get_hash(), start_hash_gray)
                         << "Hash mismatch after make/unmake for Gray as " << static_cast<int>(god)
-                        << " on move: " << move->to_text()
+                        << " on move: " << move.to_text()
                         << "\nInitial board:\n" << start_pos_gray;
                     ASSERT_EQ(board_gray.to_text(), start_pos_gray)
                         << "Board state mismatch after make/unmake for Gray as " << static_cast<int>(god)
-                        << " on move: " << move->to_text()
+                        << " on move: " << move.to_text()
                         << "\nBefore: " << start_pos_gray
                         << "\nAfter:  " << board_gray.to_text();
                     total_moves_tested++;
@@ -90,15 +90,15 @@ TEST(FullUnmakeMoveTests, MakeUnmakeRestoresBoardStateAndHash) {
 
                 auto moves_blue = board_blue.generate_moves();
                 for (const auto& move : moves_blue) {
-                    board_blue.make_move(*move);
-                    board_blue.unmake_move(*move);
+                    board_blue.make_move(move);
+                    board_blue.unmake_move(move);
                     ASSERT_EQ(board_blue.get_hash(), start_hash_blue)
                         << "Hash mismatch after make/unmake for Blue as " << static_cast<int>(god)
-                        << " on move: " << move->to_text()
+                        << " on move: " << move.to_text()
                         << "\nInitial board:\n" << start_pos_blue;
                     ASSERT_EQ(board_blue.to_text(), start_pos_blue)
                         << "Board state mismatch after make/unmake for Blue as " << static_cast<int>(god)
-                        << " on move: " << move->to_text()
+                        << " on move: " << move.to_text()
                         << "\nBefore: " << start_pos_blue
                         << "\nAfter:  " << board_blue.to_text();
                     total_moves_tested++;

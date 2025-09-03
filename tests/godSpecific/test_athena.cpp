@@ -72,13 +72,13 @@ TEST(AthenaTests, opponent_generated_moves_do_not_climb_after_athena_up) {
 
     // After Athena goes up, the opponent (Blue) now gets the move.
     // Athena's effect should prevent any move that climbs upward.
-    std::vector<std::unique_ptr<Moves::Move>> blue_moves = board.generate_moves(); // Should generate moves for Blue
+    std::vector<Moves::Move> blue_moves = board.generate_moves(); // Should generate moves for Blue
 
     // Check that all generated moves for Blue do not involve moving up
     bool all_moves_are_not_upward = std::all_of(blue_moves.begin(), blue_moves.end(),
-        [&](const std::unique_ptr<Moves::Move>& move) {
-           sq_i origin = move->from_sq;
-           sq_i final_pos = move->to_sq; // Use .to_sq from unified class
+        [&](const Moves::Move& move) {
+           sq_i origin = move.from_sq;
+           sq_i final_pos = move.to_sq;
             // In C++, we need to access _blocks directly for the board state.
             return board._blocks[final_pos] <= board._blocks[origin];
         }
@@ -126,3 +126,4 @@ TEST(AthenaTests, athena_opponent_no_move_loses) {
 }
 
 } // namespace Santorini
+

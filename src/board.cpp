@@ -225,16 +225,12 @@ namespace Santorini {
 
   }
 
-  std::vector < std::unique_ptr < Moves::Move >> Board::generate_moves() const {
-
+  std::vector<Moves::Move>Board::generate_moves() const {
     auto moves = _generate_god_moves();
 
     for (auto & move: moves) {
-
-      move -> had_athena_flag = _prevent_up_next_turn;
-
+      move.had_athena_flag = _prevent_up_next_turn;
     }
-
     return moves;
 
   }
@@ -796,7 +792,7 @@ bool Board::_blocked_by_athena(const int from_sq, const int to_sq) const {
 
 }
 
-std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() const {
+std::vector<Moves::Move>Board::_generate_god_moves() const {
 
     int current_player_idx = (_turn == 1) ? 0 : 1;
 
@@ -837,8 +833,8 @@ std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() cons
 
   }
 
-  std::vector<std::unique_ptr<Moves::Move>> Board::_generate_apollo_moves() const {
-    std::vector<std::unique_ptr<Moves::Move>> moves;
+  std::vector<Moves::Move> Board::_generate_apollo_moves() const {
+    std::vector<Moves::Move> moves;
     int start_idx = (_turn == 1) ? 0 : 2;
     for (int i = 0; i < 2; ++i) {
 
@@ -858,7 +854,7 @@ std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() cons
           if (build_sq == from_sq) {
             if (occupant || _blocks[build_sq] == 4) continue;
           } else if (!is_free(build_sq)) continue;
-            moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::APOLLO));
+            moves.push_back(Moves::Move(from_sq, to_sq, build_sq, Constants::God::APOLLO));
         }
       }
     }
@@ -866,8 +862,8 @@ std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() cons
   }
 
 
-  std::vector<std::unique_ptr<Moves::Move>> Board::_generate_artemis_moves() const {
-    std::vector<std::unique_ptr<Moves::Move>> moves;
+  std::vector<Moves::Move> Board::_generate_artemis_moves() const {
+    std::vector<Moves::Move> moves;
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -879,7 +875,7 @@ std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() cons
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::ARTEMIS));
+            moves.push_back(Moves::Move(from_sq, to_sq, build_sq, Constants::God::ARTEMIS));
           }
         }
 
@@ -889,7 +885,7 @@ std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() cons
 
           for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
             if (_build_ok(from_sq, second_sq, build_sq)) {
-              moves.push_back(std::make_unique<Moves::Move>(from_sq, second_sq, build_sq, Constants::God::ARTEMIS));
+              moves.push_back(Moves::Move(from_sq, second_sq, build_sq, Constants::God::ARTEMIS));
             }
           }
         }
@@ -900,8 +896,8 @@ std::vector < std::unique_ptr < Moves::Move >> Board::_generate_god_moves() cons
 
 
 // --- Athena ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_athena_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_athena_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -912,7 +908,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_athena_moves() const 
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::ATHENA));
+          moves.push_back(Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATHENA));
         }
       }
     }
@@ -921,8 +917,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_athena_moves() const 
 }
 
 // --- Atlas ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_atlas_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_atlas_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -935,15 +931,15 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_atlas_moves() const {
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
           // Normal build
-          auto move = std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          move->atlas_original_height = _blocks[build_sq];
-          moves.push_back(std::move(move));
+          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
+          move.atlas_original_height = _blocks[build_sq];
+          moves.emplace_back(move);
           // Dome build
           if (_blocks[build_sq] < 4) {
-            auto dome_move = std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-            dome_move->dome = true;
-            dome_move->atlas_original_height = _blocks[build_sq];
-            moves.push_back(std::move(dome_move));
+            auto dome_move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
+            dome_move.dome = true;
+            dome_move.atlas_original_height = _blocks[build_sq];
+            moves.emplace_back(dome_move);
           }
         }
       }
@@ -953,8 +949,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_atlas_moves() const {
 }
 
 // --- Demeter ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_demeter_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_demeter_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -972,12 +968,12 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_demeter_moves() const
       }
 
       for (size_t j = 0; j < build_sqs.size(); ++j) {
-        moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER));
+        moves.emplace_back(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
 
         for (size_t k = j + 1; k < build_sqs.size(); ++k) {
-          auto move = std::make_unique<Moves::Move>(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-          move->extra_build_sq = build_sqs[k];
-          moves.push_back(std::move(move));
+          auto move = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+          move.extra_build_sq = build_sqs[k];
+          moves.emplace_back(move);
         }
       }
     }
@@ -986,8 +982,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_demeter_moves() const
 }
 
 // --- Hephaestus ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hephaestus_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_hephaestus_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -999,11 +995,11 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hephaestus_moves() co
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS));
+          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
           if (_blocks[build_sq] < 2) {
-            auto move = std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-            move->extra_build_sq = build_sq;
-            moves.push_back(std::move(move));
+            auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+            move.extra_build_sq = build_sq;
+            moves.emplace_back(move);
           }
         }
       }
@@ -1013,8 +1009,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hephaestus_moves() co
 }
 
 // --- Hermes ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hermes_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_hermes_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1028,7 +1024,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hermes_moves() const 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_blocked_by_athena(from_sq, to_sq)) continue;
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::HERMES));
+          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
         }
       }
     }
@@ -1036,7 +1032,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hermes_moves() const 
     // Build without moving
     for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
       if (_build_ok(from_sq, from_sq, build_sq)) {
-        moves.push_back(std::make_unique<Moves::Move>(from_sq, from_sq, build_sq, Constants::God::HERMES));
+        moves.emplace_back(from_sq, from_sq, build_sq, Constants::God::HERMES);
       }
     }
     // Multi-step ground moves
@@ -1054,7 +1050,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hermes_moves() const 
 
         for (sq_i build_sq : Constants::NEIGHBOURS[next_sq]) {
           if (_build_ok(from_sq, next_sq, build_sq)) {
-            moves.push_back(std::make_unique<Moves::Move>(from_sq, next_sq, build_sq, Constants::God::HERMES));
+            moves.emplace_back(from_sq, next_sq, build_sq, Constants::God::HERMES);
           }
         }
         q.push_back(next_sq);
@@ -1065,8 +1061,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_hermes_moves() const 
 }
 
 // --- Minotaur ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_minotaur_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_minotaur_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1091,9 +1087,9 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_minotaur_moves() cons
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (push_sq && *push_sq == build_sq) continue;
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          auto move = std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
-          move->minotaur_pushed = push_sq.has_value();
-          moves.push_back(std::move(move));
+          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
+          move.minotaur_pushed = push_sq.has_value();
+          moves.push_back(Moves::Move(move));
         }
       }
     }
@@ -1102,8 +1098,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_minotaur_moves() cons
 }
 
 // --- Pan ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_pan_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_pan_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1115,7 +1111,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_pan_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::PAN));
+          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PAN);
         }
       }
     }
@@ -1124,8 +1120,8 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_pan_moves() const {
 }
 
 // --- Prometheus ---
-std::vector<std::unique_ptr<Moves::Move>> Board::_generate_prometheus_moves() const {
-  std::vector<std::unique_ptr<Moves::Move>> moves;
+std::vector<Moves::Move> Board::_generate_prometheus_moves() const {
+  std::vector<Moves::Move> moves;
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1138,7 +1134,7 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_prometheus_moves() co
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.push_back(std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS));
+          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
         }
       }
     }
@@ -1155,9 +1151,9 @@ std::vector<std::unique_ptr<Moves::Move>> Board::_generate_prometheus_moves() co
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            auto move = std::make_unique<Moves::Move>(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
-            move->extra_build_sq = opt_build_sq;
-            moves.push_back(std::move(move));
+            auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
+            move.extra_build_sq = opt_build_sq;
+            moves.push_back(Moves::Move(move));
           }
         }
       }
