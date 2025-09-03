@@ -8,8 +8,9 @@
 
 namespace Santorini {
 
-// Forward declaration
-inline std::unique_ptr<Moves::Move> clone_move(const Moves::Move& move);
+inline std::unique_ptr<Moves::Move> clone_move(const Moves::Move& move) {
+    return std::make_unique<Moves::Move>(move);
+}
 
 struct TTEntry {
     uint64_t hash_key;
@@ -121,21 +122,7 @@ public:
     }
 };
 
-// Helper function to clone a move polymorphically
-inline std::unique_ptr<Moves::Move> clone_move(const Moves::Move& move) {
-    if (auto m = dynamic_cast<const Moves::ApolloMove*>(&move)) return std::make_unique<Moves::ApolloMove>(*m);
-    if (auto m = dynamic_cast<const Moves::ArtemisMove*>(&move)) return std::make_unique<Moves::ArtemisMove>(*m);
-    if (auto m = dynamic_cast<const Moves::AthenaMove*>(&move)) return std::make_unique<Moves::AthenaMove>(*m);
-    if (auto m = dynamic_cast<const Moves::AtlasMove*>(&move)) return std::make_unique<Moves::AtlasMove>(*m);
-    if (auto m = dynamic_cast<const Moves::DemeterMove*>(&move)) return std::make_unique<Moves::DemeterMove>(*m);
-    if (auto m = dynamic_cast<const Moves::HephaestusMove*>(&move)) return std::make_unique<Moves::HephaestusMove>(*m);
-    if (auto m = dynamic_cast<const Moves::HermesMove*>(&move)) return std::make_unique<Moves::HermesMove>(*m);
-    if (auto m = dynamic_cast<const Moves::MinotaurMove*>(&move)) return std::make_unique<Moves::MinotaurMove>(*m);
-    if (auto m = dynamic_cast<const Moves::PanMove*>(&move)) return std::make_unique<Moves::PanMove>(*m);
-    if (auto m = dynamic_cast<const Moves::PrometheusMove*>(&move)) return std::make_unique<Moves::PrometheusMove>(*m);
 
-    throw std::runtime_error("Unknown move type to clone");
-}
 
 inline TTEntry::TTEntry(uint64_t key, const Moves::Move& m, int d, int s, char f)
     : hash_key(key), depth(d), score(s), flag(f) {

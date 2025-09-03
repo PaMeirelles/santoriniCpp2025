@@ -17,8 +17,8 @@ namespace Santorini {
 
         // Attempt from 0->1->0. The 'to_sq' is 0, 'mid_sq' is 1, 'from_sq' is 0.
         // In ArtemisMove constructor: from_sq, to_sq, build_sq, optional<mid_sq>
-        Moves::ArtemisMove move(0, 0, 5, 1);
-        EXPECT_FALSE(board.move_is_valid(move));
+        Moves::Move move(0, 0, 5, Constants::God::ARTEMIS);
+        EXPECT_FALSE(is_move_in_generated_list(board, move));
     }
 
     TEST(ArtemisTests, can_move_only_once_if_she_wants) {
@@ -31,8 +31,8 @@ namespace Santorini {
 
         // Single step from 0->6, build at 5. No mid_sq provided.
         // In ArtemisMove constructor: from_sq, to_sq, build_sq
-        Moves::ArtemisMove move(0, 6, 5);
-        EXPECT_TRUE(board.move_is_valid(move));
+        Moves::Move move(0, 6, 5, Constants::God::ARTEMIS);
+        EXPECT_TRUE(is_move_in_generated_list(board, move));
     }
 
 } // namespace Santorini

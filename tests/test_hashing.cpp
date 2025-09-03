@@ -137,17 +137,17 @@ namespace Santorini {
     }
 
     TEST(TestBoardHashing, HashMatchesAfterMove) {
-        auto scenarios = Santorini::get_stress_scenarios();
+        auto scenarios = get_stress_scenarios();
         for (auto& board : scenarios) {
             std::string start_pos = board.to_text();
             auto moves = board.generate_moves();
 
             for (const auto& move : moves) {
-                Santorini::Board test_board(start_pos);
+                Board test_board(start_pos);
                 test_board.make_move(*move);
                 uint64_t live_hash = test_board.get_hash();
 
-                Santorini::Board rebuilt_board(test_board.to_text());
+                Board rebuilt_board(test_board.to_text());
                 uint64_t rebuilt_hash = rebuilt_board.get_hash();
 
                 ASSERT_EQ(live_hash, rebuilt_hash)

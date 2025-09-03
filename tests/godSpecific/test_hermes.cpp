@@ -27,11 +27,13 @@ TEST(HermesTests, cannot_move_up_while_using_power) {
     std::fill(blocks.begin(), blocks.end(), 0);
     // Square 1 is height=1, so moving from 0 to 1 is an "up" move
     blocks[1] = 1;
+    blocks[2] = 1;
+    blocks[3] = 1;
     Board board = create_board(blocks, {0, 10}, {23, 24}, 1, Constants::God::HERMES, Constants::God::ARTEMIS);
 
     // The move from 0->1 is an upward move, which is invalid for Hermes's chain movement.
-    Moves::HermesMove move(0, {1, 2}, 3);
-    EXPECT_FALSE(board.move_is_valid(move)) << "Hermes's chain move should not allow upward movement";
+    Moves::Move move(0, 3, 4, Constants::God::HERMES);
+    EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Hermes's chain move should not allow upward movement";
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -42,8 +44,8 @@ TEST(HermesTests, can_move_on_h1) {
     Board board = create_board(blocks, {0, 10}, {23, 24}, 1, Constants::God::HERMES, Constants::God::ARTEMIS);
 
     // This is a horizontal chain move on a flat plane of height 1. This should be a valid move.
-    Moves::HermesMove move(0, {1, 2}, 3);
-    EXPECT_TRUE(board.move_is_valid(move)) << "Hermes should be able to move horizontally on any flat level";
+    Moves::Move move(0, 2, 3, Constants::God::HERMES);
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Hermes should be able to move horizontally on any flat level";
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -19,8 +19,9 @@ TEST(DemeterTests, cannot_build_twice_on_same_square) {
 
     // Attempt from 0->1, build_sq_1=2, build_sq_2=2 => invalid
     // DemeterMove constructor:sqfrom,sqto,sqb1, optional<sq> b2 = nullopt
-    Moves::DemeterMove move(0, 1, 2, 2); // Building on square 2 twice
-    EXPECT_FALSE(board.move_is_valid(move)) << "Demeter should not be able to build twice on the same square";
+    Moves::Move move(0, 1, 2, Constants::God::DEMETER); // Building on square 2 twice
+    move.extra_build_sq = 2;
+    EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Demeter should not be able to build twice on the same square";
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -33,8 +34,8 @@ TEST(DemeterTests, can_build_only_once_if_desired) {
 
     // From 0->1, build at 2 only once. No second build square.
     // DemeterMove constructor:sqfrom,sqto,sqb1, optional<sq> b2 = nullopt
-    Moves::DemeterMove move(0, 1, 2); // Only build_sq_1 is provided, build_sq_2 is std::nullopt
-    EXPECT_TRUE(board.move_is_valid(move)) << "Demeter should be able to build only once if desired";
+    Moves::Move move(0, 1, 2, Constants::God::DEMETER); // Building on square 2 twice
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Demeter should be able to build only once if desired";
     
     board.make_move(move);
     // Accessing _blocks directly for testing purposes due to friendship

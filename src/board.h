@@ -20,8 +20,6 @@ public:
 
 explicit Board(const std::string& position);
 
-bool move_is_valid(const Moves::Move& move) const;
-
 void make_move(const Moves::Move& move);
 
 void unmake_move(const Moves::Move& move);
@@ -125,115 +123,20 @@ bool _blocked_by_athena(int from_sq, int to_sq) const;
 // --- God-Specific Logic ---
 
 void _execute_god_move(const Moves::Move& move);
-
 void _undo_god_move(const Moves::Move& move);
-
-bool _validate_god_move(const Moves::Move& move) const;
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_god_moves() const;
 
 
-
-// ... Declarations for each god's validation, execution, undo, and generation functions
-
-bool _is_valid_apollo(const Moves::ApolloMove& move) const;
-
-void _execute_apollo(const Moves::ApolloMove& move);
-
-void _undo_apollo(const Moves::ApolloMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_apollo_moves() const;
-
-
-
-bool _is_valid_artemis(const Moves::ArtemisMove& move) const;
-
-void _execute_artemis(const Moves::ArtemisMove& move);
-
-void _undo_artemis(const Moves::ArtemisMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_artemis_moves() const;
-
-
-
-bool _is_valid_athena(const Moves::AthenaMove& move) const;
-
-void _execute_athena(const Moves::AthenaMove& move);
-
-void _undo_athena(const Moves::AthenaMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_athena_moves() const;
-
-
-
-bool _is_valid_atlas(const Moves::AtlasMove& move) const;
-
-void _execute_atlas(const Moves::AtlasMove& move);
-
-void _undo_atlas(const Moves::AtlasMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_atlas_moves() const;
-
-
-
-bool _is_valid_demeter(const Moves::DemeterMove& move) const;
-
-void _execute_demeter(const Moves::DemeterMove& move);
-
-void _undo_demeter(const Moves::DemeterMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_demeter_moves() const;
-
-
-
-bool _is_valid_hephaestus(const Moves::HephaestusMove& move) const;
-
-void _execute_hephaestus(const Moves::HephaestusMove& move);
-
-void _undo_hephaestus(const Moves::HephaestusMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_hephaestus_moves() const;
-
-
-
-bool _is_valid_hermes(const Moves::HermesMove& move) const;
-
-void _execute_hermes(const Moves::HermesMove& move);
-
-void _undo_hermes(const Moves::HermesMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_hermes_moves() const;
-
-
-
-bool _is_valid_minotaur(const Moves::MinotaurMove& move) const;
-
-void _execute_minotaur(const Moves::MinotaurMove& move);
-
-void _undo_minotaur(const Moves::MinotaurMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_minotaur_moves() const;
-
-
-
-bool _is_valid_pan(const Moves::PanMove& move) const;
-
-void _execute_pan(const Moves::PanMove& move);
-
-void _undo_pan(const Moves::PanMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_pan_moves() const;
-
-
-
-bool _is_valid_prometheus(const Moves::PrometheusMove& move) const;
-
-void _execute_prometheus(const Moves::PrometheusMove& move);
-
-void _undo_prometheus(const Moves::PrometheusMove& move);
-
 std::vector<std::unique_ptr<Moves::Move>> _generate_prometheus_moves() const;
-
 
 
 friend class ApolloTests_swap_up_one_height_Test;

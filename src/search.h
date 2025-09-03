@@ -50,8 +50,8 @@ inline int evaluate(const Board& board) {
 inline void score_moves(std::vector<std::unique_ptr<Moves::Move>>& moves, const Board& board) {
     for (auto& mv : moves) {
         int from_h = board.get_blocks()[mv->from_sq];
-        int to_h = board.get_blocks()[mv->final_sq()];
-        mv->score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv->final_sq()] - Constants::DOUBLE_NEIGHBORS[mv->from_sq]);
+        int to_h = board.get_blocks()[mv->to_sq()];
+        mv->score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv->to_sq()] - Constants::DOUBLE_NEIGHBORS[mv->from_sq]);
     }
 }
 
@@ -92,13 +92,19 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         alpha = stand_pat;
     }
 
-    std::set<std::pair<sq_i, sq_i>> played;
+    // Use a simple boolean array for tracking visited squares.
+    // It's much faster than std::set for this purpose.
+    bool worker_move_searched[25] = {false};
     auto moves = search_info.board.generate_moves();
+
     for (auto& move : moves) {
-        if (played.count({move->from_sq, move->final_sq()})) continue;
+        // If we've already searched a move for the worker on this starting square, skip.
+        if (worker_move_searched[move->from_sq]) {
+            continue;
+        }
 
         int from_h = search_info.board.get_blocks()[move->from_sq];
-        int to_h = search_info.board.get_blocks()[move->final_sq()];
+        int to_h = search_info.board.get_blocks()[move->to_sq()];
 
         int god_index = (search_info.board.get_turn() == 1) ? 0 : 1;
         Constants::God god = search_info.board.get_gods()[god_index];
@@ -106,19 +112,25 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         bool is_climb = to_h > from_h;
         bool is_pan_drop = (god == Constants::God::PAN && from_h - to_h >= 2);
 
+        // Only search "non-quiet" moves like climbs or special god moves.
         if (!(is_climb || is_pan_drop)) {
             continue;
         }
 
         search_info.board.make_move(*move);
-        played.insert({move->from_sq, move->final_sq()});
+        // Mark this worker's starting square as searched for this node.
+        worker_move_searched[move->from_sq] = true;
         int score = -qsearch(search_info, -beta, -alpha);
         search_info.board.unmake_move(*move);
 
         if (search_info.quit) return 0;
 
-        if (score >= beta) return beta;
-        if (score > alpha) alpha = score;
+        if (score >= beta) {
+            return beta;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
     }
 
     return alpha;

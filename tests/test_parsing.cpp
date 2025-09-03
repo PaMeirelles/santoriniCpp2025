@@ -76,8 +76,8 @@ TEST(TestPositionParsing, AthenaFlagParsed) {
     blocks[4] = 1; // Blue needs a square to move up to
     Board board = create_board(blocks, {0, 1}, {2, 3}, -1, Constants::God::ATHENA, Constants::God::APOLLO, true);
 
-    Moves::ApolloMove move(3, 4, 8);
-    EXPECT_FALSE(board.move_is_valid(move));
+    Moves::Move move(3, 4, 8, Constants::God::APOLLO);
+    EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 
 } // namespace Santorini
