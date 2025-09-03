@@ -74,6 +74,25 @@ TEST(PrometheusTests, cannot_move_up_to_newly_built) {
     move.extra_build_sq = 5;
     EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Prometheus cannot move up to a square just built on";
 }
+TEST(PrometheusTests, cannot_build_twice_on_height_3) {
+    /**
+     * Prometheus should not be able to perform a pre-build and a final build
+     * on the same square if that square is already at height 3. The pre-build
+     * would place a dome, making the final build invalid.
+     */
+    std::array<sq_i, 25> blocks{};
+    std::fill(blocks.begin(), blocks.end(), 0);
+    blocks[5] = 3; // Target build square is already at height 3
+    Board board = create_board(blocks, {0, 10}, {23, 24}, 1, Constants::God::PROMETHEUS, Constants::God::ARTEMIS);
 
+    // Attempt to:
+    // 1. Pre-build on square 5 (height 3) from worker at 0. This places a dome.
+    // 2. Move worker from 0 to 1.
+    // 3. Final build on square 5 (now domed). This is invalid.
+    Moves::Move move(0, 1, 5, Constants::God::PROMETHEUS);
+    move.extra_build_sq = 5; // Pre-build on the same square.
+
+    EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Prometheus cannot build twice on a square that starts at height 3";
+}
 } // namespace Santorini
 

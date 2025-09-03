@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <deque>
+#include <iostream>
 
 #include <set>
 
@@ -667,6 +668,9 @@ void Board::_execute_god_move(const Moves::Move& move) {
       if (move.extra_build_sq.has_value()) {
         _inc_block(*move.extra_build_sq);
       }
+      if (_blocks[move.build_sq]>=4) {
+        std::cout << "here " << move.build_sq << "\n";
+      }
       _move_worker(move.from_sq, move.to_sq);
       _inc_block(move.build_sq);
       break;
@@ -1153,6 +1157,7 @@ std::vector<Moves::Move> Board::_generate_prometheus_moves() const {
           if (_build_ok(from_sq, to_sq, build_sq)) {
             auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
             move.extra_build_sq = opt_build_sq;
+            if (move.build_sq == move.extra_build_sq && _blocks[move.build_sq] == 3) continue;
             moves.push_back(Moves::Move(move));
           }
         }

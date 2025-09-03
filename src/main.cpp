@@ -19,5 +19,5 @@ int main() {
     // Santorini::TranspositionTable tt = Santorini::TranspositionTable();
     // auto mv = Santorini::get_best_move(board, 1000000, tt, 4);
     // std::cout << mv->to_text(board) << std::endl;
-    // return 0;
+    return 0;
 }
