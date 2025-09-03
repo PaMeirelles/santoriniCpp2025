@@ -855,7 +855,7 @@ std::vector<Moves::Move>Board::_generate_god_moves() const {
           if (build_sq == from_sq) {
             if (occupant || _blocks[build_sq] == 4) continue;
           } else if (!is_free(build_sq)) continue;
-            moves.push_back(Moves::Move(from_sq, to_sq, build_sq, Constants::God::APOLLO));
+            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::APOLLO);
         }
       }
     }
@@ -876,7 +876,7 @@ std::vector<Moves::Move>Board::_generate_god_moves() const {
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.push_back(Moves::Move(from_sq, to_sq, build_sq, Constants::God::ARTEMIS));
+            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ARTEMIS);
           }
         }
 
@@ -886,7 +886,7 @@ std::vector<Moves::Move>Board::_generate_god_moves() const {
 
           for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
             if (_build_ok(from_sq, second_sq, build_sq)) {
-              moves.push_back(Moves::Move(from_sq, second_sq, build_sq, Constants::God::ARTEMIS));
+              moves.emplace_back(from_sq, second_sq, build_sq, Constants::God::ARTEMIS);
             }
           }
         }
@@ -909,7 +909,7 @@ std::vector<Moves::Move> Board::_generate_athena_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.push_back(Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATHENA));
+          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ATHENA);
         }
       }
     }
@@ -1010,56 +1010,60 @@ std::vector<Moves::Move> Board::_generate_hephaestus_moves() const {
 }
 
 // --- Hermes ---
-std::vector<Moves::Move> Board::_generate_hermes_moves() const {
-  std::vector<Moves::Move> moves;
-  int start_idx = (_turn == 1) ? 0 : 2;
+  std::vector<Moves::Move> Board::_generate_hermes_moves() const {
+    std::vector<Moves::Move> moves;
+    int start_idx = (_turn == 1) ? 0 : 2;
 
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-    int8_t h = _blocks[from_sq];
+    for (int i = 0; i < 2; ++i) {
+      sq_i from_sq = _workers[start_idx + i];
+      int8_t h = _blocks[from_sq];
 
-    // Standard moves
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
+      // Standard moves
+      for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
+        if (!_move_checks(from_sq, to_sq)) continue;
         if (_blocked_by_athena(from_sq, to_sq)) continue;
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
-        }
-      }
-    }
 
-    // Build without moving
-    for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_build_ok(from_sq, from_sq, build_sq)) {
-        moves.emplace_back(from_sq, from_sq, build_sq, Constants::God::HERMES);
-      }
-    }
-    // Multi-step ground moves
-    std::set<sq_i> visited;
-    std::deque<sq_i> q;
-    q.push_back(from_sq);
-    visited.insert(from_sq);
-    while(!q.empty()) {
-      sq_i curr = q.front();
-      q.pop_front();
-
-      for (sq_i next_sq : Constants::NEIGHBOURS[curr]) {
-        if (visited.count(next_sq) || !is_free(next_sq) || _blocks[next_sq] != h) continue;
-        visited.insert(next_sq);
-
-        for (sq_i build_sq : Constants::NEIGHBOURS[next_sq]) {
-          if (_build_ok(from_sq, next_sq, build_sq)) {
-            moves.emplace_back(from_sq, next_sq, build_sq, Constants::God::HERMES);
+        for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
+          if (_build_ok(from_sq, to_sq, build_sq)) {
+            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
           }
         }
-        q.push_back(next_sq);
+      }
+
+      // Build without moving
+      for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
+        if (_build_ok(from_sq, from_sq, build_sq)) {
+          moves.emplace_back(from_sq, from_sq, build_sq, Constants::God::HERMES);
+        }
+      }
+
+      // Multi-step ground moves
+      std::array<bool, 25> visited{}; // Initializes all to false
+      std::deque<sq_i> q;
+      q.push_back(from_sq);
+      visited[from_sq] = true;
+
+      while(!q.empty()) {
+        sq_i curr = q.front();
+        q.pop_front();
+
+        for (sq_i next_sq : Constants::NEIGHBOURS[curr]) {
+          if (visited[next_sq] || !is_free(next_sq) || _blocks[next_sq] != h) continue;
+
+          visited[next_sq] = true;
+
+          for (sq_i build_sq : Constants::NEIGHBOURS[next_sq]) {
+            if (_build_ok(from_sq, next_sq, build_sq)) {
+              moves.emplace_back(from_sq, next_sq, build_sq, Constants::God::HERMES);
+            }
+          }
+          q.push_back(next_sq);
+        }
       }
     }
+    return moves;
   }
-  return moves;
-}
+
 
 // --- Minotaur ---
 std::vector<Moves::Move> Board::_generate_minotaur_moves() const {
@@ -1090,7 +1094,7 @@ std::vector<Moves::Move> Board::_generate_minotaur_moves() const {
         if (_build_ok(from_sq, to_sq, build_sq)) {
           auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
           move.minotaur_pushed = push_sq.has_value();
-          moves.push_back(Moves::Move(move));
+          moves.emplace_back(move);
         }
       }
     }
@@ -1155,7 +1159,7 @@ std::vector<Moves::Move> Board::_generate_prometheus_moves() const {
             auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
             move.extra_build_sq = opt_build_sq;
             if (move.build_sq == move.extra_build_sq && _blocks[move.build_sq] == 3) continue;
-            moves.push_back(Moves::Move(move));
+            moves.emplace_back(move);
           }
         }
       }

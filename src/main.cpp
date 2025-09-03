@@ -14,7 +14,7 @@ int main() {
     Santorini::SantoriniEngine engine;
     engine.run();
 
-    // auto pos = "0N0N0N0N0N0N0G0B0N0N0N0B0G0N0N0N0N0N0N0N0N0N0N0N0N0600";
+    // auto pos = "0N0G0N0N0N0B0N0N0N0N0N0N0N0N0B0N0N0N0N0N0N0N0G0N0N0900";
     // Santorini::Board board = Santorini::Board(pos);
     // // Santorini::TranspositionTable tt = Santorini::TranspositionTable();
     // for (int i=0; i < 100000; i++) auto mvs = board.generate_moves();
