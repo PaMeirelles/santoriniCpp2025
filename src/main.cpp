@@ -14,10 +14,10 @@ int main() {
     Santorini::SantoriniEngine engine;
     engine.run();
 
-    // auto pos = "0N0N0N0N0N0N0G1N0N0N1N0B0G0B0N0N1N1N0N0N0N0N0N0N0N0600";
+    // auto pos = "0N0N0N0N0N0N0G0B1G2N0N0N0B0N0N0N0N1N0N0N0N0N0N0N0N1890";
     // Santorini::Board board = Santorini::Board(pos);
     // Santorini::TranspositionTable tt = Santorini::TranspositionTable();
-    // auto mv = Santorini::get_best_move(board, 60000, tt, 5);
+    // auto mv = Santorini::get_best_move(board, 1000000, tt, 4);
     // std::cout << mv->to_text(board) << std::endl;
-    return 0;
+    // return 0;
 }

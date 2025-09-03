@@ -708,9 +708,9 @@ void Board::_execute_god_move(const Moves::Move& move) {
     case Constants::God::HERMES:
     case Constants::God::PAN: {
       default:
+        _last_move_height_diff = _blocks[move.to_sq] - _blocks[move.from_sq];
         _move_worker(move.from_sq, move.to_sq);
         _inc_block(move.build_sq);
-        _last_move_height_diff = _blocks[move.to_sq] - _blocks[move.from_sq];
       break;
     }
   }
