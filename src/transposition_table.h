@@ -60,23 +60,35 @@ public:
         size_t index = key % num_entries;
         const auto& entry_opt = table[index];
 
-        if (entry_opt && entry_opt->hash_key == key && entry_opt->depth >= depth) {
+        if (entry_opt && entry_opt->hash_key == key) {
             hits++;
             const TTEntry& entry = *entry_opt;
             const Moves::Move* move_ptr = entry.move ? &(*entry.move) : nullptr;
 
-            if (entry.flag == 'A' && entry.score <= alpha) {
-                cuts++;
-                return {move_ptr, alpha};
+            // If the stored search depth is sufficient, we can potentially use the score for a cutoff.
+            if (entry.depth >= depth) {
+                if (entry.flag == 'A' && entry.score <= alpha) {
+                    cuts++;
+                    // The stored score is an upper bound and is already too low.
+                    return {move_ptr, alpha};
+                }
+                if (entry.flag == 'B' && entry.score >= beta) {
+                    cuts++;
+                    // The stored score is a lower bound and is already high enough for a cutoff.
+                    return {move_ptr, beta};
+                }
+                if (entry.flag == 'E') {
+                    // We found an exact score from a search of the same or greater depth.
+                    return {move_ptr, entry.score};
+                }
             }
-            if (entry.flag == 'B' && entry.score >= beta) {
-                cuts++;
-                return {move_ptr, beta};
-            }
-            if (entry.flag == 'E') {
-                return {move_ptr, entry.score};
-            }
+
+            // If we couldn't cause a cutoff but found a matching entry,
+            // return the move anyway to help with move ordering.
+            return {move_ptr, std::nullopt};
         }
+
+        // No matching entry was found.
         return {nullptr, std::nullopt};
     }
 
