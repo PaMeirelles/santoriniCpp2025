@@ -168,13 +168,41 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     }
 
     auto [tt_move_ptr, tt_score_opt] = tt.probe(search_info.board, alpha, beta, depth);
-    if (tt_move_ptr != nullptr) {
+    // If the probe returns a score, it's a valid cutoff.
+    if (tt_score_opt.has_value()) {
         return *tt_score_opt;
     }
 
     int max_score = -MATE * 100;
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int original_alpha = alpha;
+
+    // --- Phase 0: Search TT move first if it exists ---
+    if (tt_move_ptr != nullptr) {
+        auto& move = *tt_move_ptr;
+        search_info.board.make_move(move);
+        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+        search_info.board.unmake_move(move);
+
+        if (search_info.quit) {
+            search_info.bestMove = nullptr;
+            return 0;
+        }
+
+        if (curr_score > max_score) {
+            max_score = curr_score;
+            best_move = std::make_unique<Moves::Move>(move);
+            if (max_score > alpha) {
+                if (max_score >= beta) {
+                    search_info.bestMove = std::move(best_move);
+                    tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+                    return beta; // Beta cutoff from TT move
+                }
+                alpha = max_score;
+            }
+        }
+    }
+
 
     // --- Phase 1: Generate and search climber moves first ---
     auto climber_moves = search_info.board.generate_climber_moves();
@@ -183,6 +211,11 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     for (size_t i = 0; i < climber_moves.size(); ++i) {
         pick_move(climber_moves, i);
         auto& move = climber_moves[i];
+
+        // Skip if this is the TT move we already searched
+        if (tt_move_ptr != nullptr && move == *tt_move_ptr) {
+            continue;
+        }
 
         search_info.board.make_move(move);
         int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
@@ -211,8 +244,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     // --- Phase 2: Generate and search quiet moves ---
     auto quiet_moves = search_info.board.generate_quiet_moves();
 
-    // Check for loss (no moves available) only after checking both lists
-    if (climber_moves.empty() && quiet_moves.empty()) {
+    // Check for loss (no moves available). This is adjusted to not fire if we found a TT move.
+    if (best_move == nullptr && climber_moves.empty() && quiet_moves.empty()) {
         return -MATE + ply;
     }
 
@@ -221,6 +254,11 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     for (size_t i = 0; i < quiet_moves.size(); ++i) {
         pick_move(quiet_moves, i);
         auto& move = quiet_moves[i];
+
+        // Skip if this is the TT move we already searched
+        if (tt_move_ptr != nullptr && move == *tt_move_ptr) {
+            continue;
+        }
 
         search_info.board.make_move(move);
         int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);

@@ -78,6 +78,14 @@ namespace Moves {
       const Constants::God god): from_sq(from_sq), god(god), to_sq(to_sq), build_sq(build_sq) {
       }
       [[nodiscard]] std::string to_text(const Santorini::Board& board) const;
+
+    bool operator==(const Move& other) const {
+      return from_sq == other.from_sq &&
+             to_sq == other.to_sq &&
+             build_sq == other.build_sq &&
+             dome == other.dome &&
+             extra_build_sq == other.extra_build_sq;
+    }
   };
 
 } // namespace Santorini::Moves
