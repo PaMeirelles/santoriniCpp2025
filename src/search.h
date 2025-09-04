@@ -11,6 +11,7 @@
 #include "moves.h"
 #include "transposition_table.h"
 #include "evaluation.h"
+#include "killer_moves.h"
 
 namespace Santorini {
 
@@ -47,8 +48,18 @@ inline int evaluate(const Board& board) {
     return score_position(board) * board.get_turn();
 }
 
-inline void score_moves(std::vector<Moves::Move> &moves, const Board& board) {
+inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, KillerMoves& k_moves, int ply) {
+    auto k1 = k_moves.killers[ply][0];
+    auto k2 = k_moves.killers[ply][1];
     for (auto& mv : moves) {
+        if (k1.has_value() && *k1==mv) {
+            mv.score = 900000;
+            continue;
+        }
+        if (k2.has_value() && *k2==mv) {
+            mv.score = 800000;
+            continue;
+        }
         int from_h = board.get_blocks()[mv.from_sq];
         int to_h = board.get_blocks()[mv.to_sq];
         mv.score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
@@ -69,7 +80,8 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
     }
 }
 
-int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt, bool allow_null = true);
+int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
+    KillerMoves& k_moves, bool allow_null = true);
 
 inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
     search_info.nodes++;
@@ -137,7 +149,8 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
     return alpha;
 }
 
-inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt, bool allow_null) {
+inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta,
+    TranspositionTable& tt, KillerMoves& k_moves, bool allow_null) {
     search_info.nodes++;
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
         search_info.quit = true;
@@ -162,7 +175,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         bool prevent_up = search_info.board.get_prevent_up_next_turn();
         search_info.board.make_null_move();
         int score = -search(search_info, depth - 1 - adaptive_null_reduction(ply),
-                        ply + 1, -beta, -beta + 1, tt, false);
+                        ply + 1, -beta, -beta + 1, tt, k_moves, false);
         search_info.board.unmake_null_move(prevent_up);
         if (score >= beta) {
 
@@ -188,7 +201,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             search_info.board.make_move(move);
 
 
-            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
 
             search_info.board.unmake_move(move);
 
@@ -217,7 +230,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
     // --- Phase 1: Generate and search climber moves first ---
     auto climber_moves = search_info.board.generate_climber_moves();
-    score_moves(climber_moves, search_info.board);
+    score_moves(climber_moves, search_info.board, k_moves, ply);
 
     for (size_t i = 0; i < climber_moves.size(); ++i) {
         pick_move(climber_moves, i);
@@ -229,7 +242,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
 
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
@@ -263,7 +276,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return -MATE + ply;
     }
 
-    score_moves(quiet_moves, search_info.board);
+    score_moves(quiet_moves, search_info.board, k_moves, ply);
 
     for (size_t i = 0; i < quiet_moves.size(); ++i) {
         pick_move(quiet_moves, i);
@@ -275,7 +288,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
 
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
@@ -290,6 +303,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             if (max_score > alpha) {
                 if (max_score >= beta) {
                     // Beta cutoff from a quiet move
+                    k_moves.add(ply, move);
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
 
@@ -326,14 +340,16 @@ inline std::unique_ptr<Moves::Move> get_best_move(
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int prev_score = 0;
+    KillerMoves killers;
 
     for (int depth = 1; ; ++depth) {
+        killers.clear();
         int alpha = std::max(-MATE, prev_score - ASP_WINDOW);
         int beta = std::min(MATE, prev_score + ASP_WINDOW);
 
         while (true) {
             SearchInfo si(board, depth, end_time);
-            int score = search(si, depth, 0, alpha, beta, tt);
+            int score = search(si, depth, 0, alpha, beta, tt, killers);
 
             if (si.quit) {
                 return best_move;
