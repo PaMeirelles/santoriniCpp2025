@@ -18,9 +18,8 @@ TEST(PrometheusTests, can_move_normally_if_you_want) {
     Board board = create_board(std::nullopt, {0, 10}, {23, 24}, 1, Constants::God::PROMETHEUS, Constants::God::ARTEMIS);
 
     // From 0->1, then build at 2, with no optional build => valid
-    // PrometheusMove constructor:sqfrom,sqto,sqbuild, optional<sq> opt_build = nullopt
-    Moves::PrometheusMove move(0, 1, 2);
-    EXPECT_TRUE(board.move_is_valid(move)) << "Prometheus should be able to make a normal move without a pre-build";
+    Moves::Move move(0, 1, 2, Constants::God::PROMETHEUS);
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Prometheus should be able to make a normal move without a pre-build";
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -38,9 +37,9 @@ TEST(PrometheusTests, second_build_must_be_before_moving) {
     // Suppose from=0, optional_build=5 => adjacent to 0.
     // Then move to 1 => valid single step from new worker pos.
     // Then build at 2 => adjacent to 1.
-    // PrometheusMove constructor:sqfrom,sqto,sqbuild, optional<sq> opt_build = nullopt
-    Moves::PrometheusMove move(0, 1, 2, 5);
-    EXPECT_TRUE(board.move_is_valid(move)) << "Prometheus should be able to perform a pre-build, move, and final build";
+    Moves::Move move(0, 1, 2, Constants::God::PROMETHEUS);
+    move.extra_build_sq = 5;
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Prometheus should be able to perform a pre-build, move, and final build";
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -53,9 +52,9 @@ TEST(PrometheusTests, cannot_move_up_if_built_before_moving) {
 
     // If we set optional_build=5 (adjacent to 0), that means we built first.
     // Prometheus cannot move up after an optional build.
-    // PrometheusMove constructor:sqfrom,sqto,sqbuild, optional<sq> opt_build = nullopt
-    Moves::PrometheusMove move(0, 1, 2, 5); // Pre-build at 5, then move from 0->1 (up)
-    EXPECT_FALSE(board.move_is_valid(move)) << "Prometheus cannot move up if a pre-build was performed";
+    Moves::Move move(0, 1, 2, Constants::God::PROMETHEUS); // Pre-build at 5, then move from 0->1 (up)
+    move.extra_build_sq = 5;
+    EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Prometheus cannot move up if a pre-build was performed";
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -71,8 +70,29 @@ TEST(PrometheusTests, cannot_move_up_to_newly_built) {
     // which is an upward move to a square it just built on. This should be invalid.
     // The `_is_valid_prometheus` check `_blocks[move.to_sq] + temp_h_adj > _blocks[move.from_sq]`
     // should catch this, where `temp_h_adj` accounts for the pre-build on `to_sq`.
-    Moves::PrometheusMove move(0, 5, 10, 5); // Pre-build at 5, then move from 0->5 (up to new build)
-    EXPECT_FALSE(board.move_is_valid(move)) << "Prometheus cannot move up to a square just built on";
+    Moves::Move move(0, 5, 10, Constants::God::PROMETHEUS); // Pre-build at 5, then move from 0->5 (up to new build)
+    move.extra_build_sq = 5;
+    EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Prometheus cannot move up to a square just built on";
 }
+TEST(PrometheusTests, cannot_build_twice_on_height_3) {
+    /**
+     * Prometheus should not be able to perform a pre-build and a final build
+     * on the same square if that square is already at height 3. The pre-build
+     * would place a dome, making the final build invalid.
+     */
+    std::array<sq_i, 25> blocks{};
+    std::fill(blocks.begin(), blocks.end(), 0);
+    blocks[5] = 3; // Target build square is already at height 3
+    Board board = create_board(blocks, {0, 10}, {23, 24}, 1, Constants::God::PROMETHEUS, Constants::God::ARTEMIS);
 
+    // Attempt to:
+    // 1. Pre-build on square 5 (height 3) from worker at 0. This places a dome.
+    // 2. Move worker from 0 to 1.
+    // 3. Final build on square 5 (now domed). This is invalid.
+    Moves::Move move(0, 1, 5, Constants::God::PROMETHEUS);
+    move.extra_build_sq = 5; // Pre-build on the same square.
+
+    EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Prometheus cannot build twice on a square that starts at height 3";
+}
 } // namespace Santorini
+

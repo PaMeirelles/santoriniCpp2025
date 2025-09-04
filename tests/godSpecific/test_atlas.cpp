@@ -1,9 +1,8 @@
-#include "gtest/gtest.h"
 #include "../test_helpers.h"
 #include "../../src/board.h"
 #include "../../src/constants.h"
 #include "../../src/moves.h"
-#include <vector>
+#include "gtest/gtest.h"
 #include <optional>
 #include <algorithm>
 
@@ -25,10 +24,10 @@ namespace Santorini {
                                    Constants::God::ATLAS, Constants::God::APOLLO);
 
         // Gray uses Atlas power to move from 0->5, then build a dome at 6
-        // AtlasMove constructor:sqfrom,sqto,sqbuild, bool has_dome, optional<sq> orig_h = nullopt
-        // We pass the original height of blocks[6] before it becomes a dome for undo purposes.
-        Moves::AtlasMove move_atlas(0, 5, 6, true, board._blocks[6]);
-        EXPECT_TRUE(board.move_is_valid(move_atlas)) << "Atlas move to build a dome should be valid";
+        Moves::Move move_atlas(0, 5, 6, Constants::God::ATLAS);
+        move_atlas.dome = true;
+        move_atlas.atlas_original_height = board._blocks[6]; // Store original height for undo
+        EXPECT_TRUE(is_move_in_generated_list(board, move_atlas)) << "Atlas move to build a dome should be valid";
         board.make_move(move_atlas);
 
         // Verify the dome was built
@@ -36,9 +35,8 @@ namespace Santorini {
 
         // Now it's Blue's turn (board.turn should be -1 for Blue).
         // Blue tries to move onto square 6 (the dome) => should be invalid
-        // ApolloMove constructor:sqfrom,sqto,sqbuild
-        Moves::ApolloMove move_blue(1, 6, 2); // Blue worker at 1 tries to move to 6, build at 2
-        EXPECT_FALSE(board.move_is_valid(move_blue)) << "Opponent should not be able to move onto a dome";
+        Moves::Move move_blue(1, 6, 2, Constants::God::APOLLO); // Blue worker at 1 tries to move to 6, build at 2
+        EXPECT_FALSE(is_move_in_generated_list(board, move_blue)) << "Opponent should not be able to move onto a dome";
     }
 
 } // namespace Santorini

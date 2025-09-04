@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_1.4_Apex)
+project(Paladini_3.0_Summit)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -11,17 +11,18 @@ set(CMAKE_CXX_STANDARD 20)
 add_library(
         santorini_engine
         src/board.cpp
+        src/moves.cpp
 )
 
 # ############################################################################
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_1.4_Apex src/main.cpp src/board.cpp)
+add_executable(Paladini_3.0_Summit src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_1.4_Apex
+        Paladini_3.0_Summit
         PRIVATE santorini_engine
 )
 
@@ -53,6 +54,7 @@ add_executable(
         tests/test_unmake_move_tests.cpp
         tests/test_transposition_table.cpp
         tests/test_evaluation.cpp
+        tests/test_climber_quiet.cpp
 )
 
 # Link the test executable against both gtest and your engine library.
