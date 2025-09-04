@@ -9,7 +9,7 @@ namespace Santorini {
     class KillerMoves {
     public:
         // Store 2 killer moves per ply.
-        std::array<std::array<std::optional<Moves::Move>, 2>, MAX_PLY> killers;
+        std::array<std::array<std::optional<Moves::Move>, 3>, MAX_PLY> killers;
 
         KillerMoves() = default;
 
@@ -19,6 +19,7 @@ namespace Santorini {
             if (killers[ply][0].has_value() && *killers[ply][0] == move) return;
 
             // Shift the existing killer and add the new one.
+            killers[ply][2] = killers[ply][1];
             killers[ply][1] = killers[ply][0];
             killers[ply][0] = move;
         }
@@ -26,7 +27,7 @@ namespace Santorini {
         void clear() {
             for (auto& ply_killers : killers) {
                 ply_killers[0].reset();
-                ply_killers[1].reset();
+                // ply_killers[1].reset();
             }
         }
     };

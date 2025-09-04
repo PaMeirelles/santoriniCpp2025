@@ -51,6 +51,7 @@ inline int evaluate(const Board& board) {
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, KillerMoves& k_moves, int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
+    auto k3 = k_moves.killers[ply][2];
     for (auto& mv : moves) {
         if (k1.has_value() && *k1==mv) {
             mv.score = 900000;
@@ -58,6 +59,10 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, Kil
         }
         if (k2.has_value() && *k2==mv) {
             mv.score = 800000;
+            continue;
+        }
+        if (k3.has_value() && *k3==mv) {
+            mv.score = 700000;
             continue;
         }
         int from_h = board.get_blocks()[mv.from_sq];
