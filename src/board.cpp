@@ -143,6 +143,18 @@ namespace Santorini {
 
   }
 
+  bool Board::_sanity_check_workers() const {
+    for (int i=0; i < 4; i++) {
+      if (_workers_map[_workers[i]] != i) return false;
+    }
+    auto counter = 0;
+    for (int i=0; i < 25; i++) {
+      counter += _workers_map[i];
+    }
+    if (counter != -15) return false;
+    return true;
+  }
+
   // ############################################################################
 
   // # Public Methods
@@ -177,9 +189,23 @@ namespace Santorini {
 
     _xor_hash(Constants::ZOBRIST_TURN);
 
+    if (Constants::DEBUG) {
+      if (!_sanity_check_workers() || _workers_map[move.to_sq] == -1) {
+        std::cout << to_text() << std::endl;
+        std::abort();
+      }
+    }
+
   }
 
   void Board::unmake_move(const Moves::Move & move) {
+    if (Constants::DEBUG) {
+      if (!_sanity_check_workers()) {
+        std::cout << to_text() << std::endl;
+        std::abort();
+      }
+    }
+
     _turn *= -1;
     _xor_hash(Constants::ZOBRIST_TURN);
 
@@ -441,7 +467,7 @@ namespace Santorini {
     return Constants::ADJACENCY_MATRIX[from][to];
   }
 
-  std::optional < sq_i > Board::_calculate_push_square(sq_i from_sq, sq_i to_sq) {
+  std::optional < sq_i > Board::_calculate_push_square(sq_i from_sq, sq_i to_sq) const{
 
     // Calculate the direction vector (dx, dy)
 
@@ -1771,6 +1797,176 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
     }
     return moves;
 }
+
+  bool Board::is_valid_move(const Moves::Move& move) const {
+    // --- Phase 1: Basic universal checks ---
+
+    // The worker at from_sq must belong to the current player.
+    auto worker_idx_opt = _which_worker_is_here(move.from_sq);
+    if (!worker_idx_opt.has_value() || _is_opponent_worker(*worker_idx_opt)) {
+        return false;
+    }
+
+    // The god associated with the move must match the current player's god.
+    int current_player_idx = (_turn == 1) ? 0 : 1;
+    if (_gods[current_player_idx] != move.god) {
+        return false;
+    }
+
+    // Athena's effect: If active, the current player cannot move up.
+    if (_blocked_by_athena(move.from_sq, move.to_sq)) {
+        return false;
+    }
+
+    // --- Phase 2: God-specific validation ---
+
+    switch (move.god) {
+        case Constants::God::ATHENA:
+        case Constants::God::PAN: {
+            return _complete_checks(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        case Constants::God::APOLLO: {
+            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !_adj_ok(move.from_sq, move.to_sq))
+                return false;
+
+            auto occupant = _which_worker_is_here(move.to_sq);
+            if (_blocks[move.to_sq] == 4 || (occupant && _is_ally_worker(*occupant)))
+                return false;
+
+            // Build square cannot be where the opponent will be moved to.
+            if (occupant && move.build_sq == move.from_sq)
+                return false;
+
+            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        case Constants::God::ARTEMIS: {
+            // Artemis can move one or two spaces. The move object only stores the final destination.
+            // We must check if a valid path of 1 or 2 steps exists.
+            bool one_step_valid = _move_checks(move.from_sq, move.to_sq);
+
+            bool two_step_valid = false;
+            if (!one_step_valid) {
+                 for (sq_i mid_sq : Constants::NEIGHBOURS[move.from_sq]) {
+                    if (_move_checks(move.from_sq, mid_sq)) {
+                        if (_adj_ok(mid_sq, move.to_sq) && move.to_sq != move.from_sq && is_free(move.to_sq)) {
+                           if (!_blocked_by_athena(mid_sq, move.to_sq) && _height_ok(mid_sq, move.to_sq)) {
+                               two_step_valid = true;
+                               break;
+                           }
+                        }
+                    }
+                }
+            }
+            if (!one_step_valid && !two_step_valid) return false;
+
+            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        case Constants::God::ATLAS: {
+            if (!_move_checks(move.from_sq, move.to_sq)) return false;
+            if (move.dome && _blocks[move.build_sq] == 4) return false;
+            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        case Constants::God::DEMETER: {
+            if (!_complete_checks(move.from_sq, move.to_sq, move.build_sq)) return false;
+            if (move.extra_build_sq) {
+                if (*move.extra_build_sq == move.build_sq) return false;
+                if (!_build_ok(move.from_sq, move.to_sq, *move.extra_build_sq)) return false;
+            }
+            return true;
+        }
+
+        case Constants::God::HEPHAESTUS: {
+            if (!_complete_checks(move.from_sq, move.to_sq, move.build_sq)) return false;
+            if (move.extra_build_sq) {
+                if (*move.extra_build_sq != move.build_sq) return false;
+                // The second build cannot place a 4th level (dome).
+                // So the height before the first build must be < 2.
+                if (_blocks[move.build_sq] >= 2) return false;
+            }
+            return true;
+        }
+
+        case Constants::God::HERMES: {
+            // Case 1: Standard one-step move.
+            bool standard_move_ok = _move_checks(move.from_sq, move.to_sq);
+
+            // Case 2: Build without moving.
+            bool build_in_place_ok = (move.from_sq == move.to_sq);
+
+            // Case 3: Multi-step move on the same level.
+            bool multi_move_ok = false;
+            if (!standard_move_ok && !build_in_place_ok) {
+                int8_t h = _blocks[move.from_sq];
+                std::array<bool, 25> visited{};
+                std::deque<sq_i> q;
+                q.push_back(move.from_sq);
+                visited[move.from_sq] = true;
+                while(!q.empty()) {
+                    sq_i curr = q.front(); q.pop_front();
+                    if (curr == move.to_sq) {
+                        multi_move_ok = true;
+                        break;
+                    }
+                    for (sq_i next_sq : Constants::NEIGHBOURS[curr]) {
+                        if (!visited[next_sq] && is_free(next_sq) && _blocks[next_sq] == h) {
+                            visited[next_sq] = true;
+                            q.push_back(next_sq);
+                        }
+                    }
+                }
+            }
+
+            if (!standard_move_ok && !build_in_place_ok && !multi_move_ok) return false;
+
+            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        case Constants::God::MINOTAUR: {
+            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !_adj_ok(move.from_sq, move.to_sq))
+                return false;
+
+            auto occupant = _which_worker_is_here(move.to_sq);
+            if (_blocks[move.to_sq] == 4 || (occupant && _is_ally_worker(*occupant)))
+                return false;
+
+            std::optional<sq_i> push_sq;
+            if (occupant) { // Must be an opponent
+                push_sq = _calculate_push_square(move.from_sq, move.to_sq);
+                if (!push_sq || !is_free(*push_sq)) return false;
+            }
+
+            if (push_sq && *push_sq == move.build_sq) return false;
+            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        case Constants::God::PROMETHEUS: {
+            if (move.extra_build_sq) { // Pre-build move
+                if (!_build_ok(move.from_sq, move.from_sq, *move.extra_build_sq)) return false;
+
+                // Cannot move up after building
+                int temp_h_adj = (move.to_sq == *move.extra_build_sq) ? 1 : 0;
+                if (_blocks[move.to_sq] + temp_h_adj > _blocks[move.from_sq]) return false;
+
+                if (!_adj_ok(move.from_sq, move.to_sq)) return false;
+                if (move.from_sq != move.to_sq && !is_free(move.to_sq)) return false;
+
+            } else { // Standard move
+                if (!_move_checks(move.from_sq, move.to_sq)) return false;
+            }
+
+            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+        }
+
+        default:
+            return false;
+    }
+}
+
+
 
   bool operator < (const Board & lhs,
     const Board & rhs) {

@@ -7,6 +7,8 @@ using sq_i = int8_t;
 
 namespace Santorini::Constants {
 
+    const bool DEBUG = false;
+
     struct NeighbourList {
         std::array<int8_t, 8> neighbours{};
         size_t count{};

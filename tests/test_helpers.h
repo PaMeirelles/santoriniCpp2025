@@ -75,25 +75,6 @@ inline Board create_board(
  */
 std::vector<Board> get_stress_scenarios();
 
-
-    /**
-     * @brief Equality operator to compare two Move objects.
-     *
-     * This is necessary to find a specific move within a list of generated moves.
-     * Two moves are considered equal if their core action properties match, including
-     * from, to, build squares, the god performing the move, and any special
-     * options like extra builds, domes, or pushes.
-     */
-    inline bool operator==(const Moves::Move& lhs, const Moves::Move& rhs) {
-        return lhs.from_sq == rhs.from_sq &&
-               lhs.to_sq == rhs.to_sq &&
-               lhs.build_sq == rhs.build_sq &&
-               lhs.god == rhs.god &&
-               lhs.extra_build_sq == rhs.extra_build_sq &&
-               lhs.dome == rhs.dome &&
-               lhs.minotaur_pushed == rhs.minotaur_pushed;
-    }
-
     /**
      * @brief Validates a move by checking if it exists in the list of legally
      * generated moves for the current board state.

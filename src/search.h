@@ -139,19 +139,21 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
 
 inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt, bool allow_null) {
     search_info.nodes++;
-
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
         search_info.quit = true;
         search_info.bestMove = nullptr;
+
         return 0;
     }
 
     int state = search_info.board.check_state();
     if (state != 0) {
+
         return (state == search_info.board.get_turn()) ? MATE - ply : -MATE + ply;
     }
 
     if (depth <= 0) {
+
         return qsearch(search_info, alpha, beta);
     }
 
@@ -163,13 +165,15 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                         ply + 1, -beta, -beta + 1, tt, false);
         search_info.board.unmake_null_move(prevent_up);
         if (score >= beta) {
+
             return beta;
         }
     }
-
-    auto [tt_move_ptr, tt_score_opt] = tt.probe(search_info.board, alpha, beta, depth);
+    std::optional<Moves::Move> tt_move_opt;
+    std::optional<int> tt_score_opt; // Or whatever your score type is
+    bool tt_hit = tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt);
     // If the probe returns a score, it's a valid cutoff.
-    if (tt_score_opt.has_value()) {
+    if (tt_hit) {
         return *tt_score_opt;
     }
 
@@ -178,27 +182,34 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     int original_alpha = alpha;
 
     // --- Phase 0: Search TT move first if it exists ---
-    if (tt_move_ptr != nullptr) {
-        auto& move = *tt_move_ptr;
-        search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
-        search_info.board.unmake_move(move);
+    if (tt_move_opt.has_value()) {
+        const Moves::Move& move = *tt_move_opt;
+        if (search_info.board.is_valid_move(move)) {
+            search_info.board.make_move(move);
 
-        if (search_info.quit) {
-            search_info.bestMove = nullptr;
-            return 0;
-        }
 
-        if (curr_score > max_score) {
-            max_score = curr_score;
-            best_move = std::make_unique<Moves::Move>(move);
-            if (max_score > alpha) {
-                if (max_score >= beta) {
-                    search_info.bestMove = std::move(best_move);
-                    tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-                    return beta; // Beta cutoff from TT move
+            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+
+            search_info.board.unmake_move(move);
+
+            if (search_info.quit) {
+                search_info.bestMove = nullptr;
+
+                return 0;
+            }
+
+            if (curr_score > max_score) {
+                max_score = curr_score;
+                best_move = std::make_unique<Moves::Move>(move);
+                if (max_score > alpha) {
+                    if (max_score >= beta) {
+                        search_info.bestMove = std::move(best_move);
+                        tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+
+                        return beta; // Beta cutoff from TT move
+                    }
+                    alpha = max_score;
                 }
-                alpha = max_score;
             }
         }
     }
@@ -213,7 +224,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         auto& move = climber_moves[i];
 
         // Skip if this is the TT move we already searched
-        if (tt_move_ptr != nullptr && move == *tt_move_ptr) {
+        if (tt_move_opt.has_value() && move == *tt_move_opt) {
             continue;
         }
 
@@ -223,6 +234,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
+
             return 0;
         }
 
@@ -234,6 +246,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                     // Beta cutoff from a climber move
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+
                     return beta;
                 }
                 alpha = max_score;
@@ -246,6 +259,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
     // Check for loss (no moves available). This is adjusted to not fire if we found a TT move.
     if (best_move == nullptr && climber_moves.empty() && quiet_moves.empty()) {
+
         return -MATE + ply;
     }
 
@@ -256,7 +270,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         auto& move = quiet_moves[i];
 
         // Skip if this is the TT move we already searched
-        if (tt_move_ptr != nullptr && move == *tt_move_ptr) {
+        if (tt_move_opt.has_value() && move == *tt_move_opt) {
             continue;
         }
 
@@ -266,6 +280,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
+
             return 0;
         }
 
@@ -277,6 +292,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                     // Beta cutoff from a quiet move
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+
                     return beta;
                 }
                 alpha = max_score;

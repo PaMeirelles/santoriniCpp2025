@@ -25,9 +25,13 @@ std::vector<Moves::Move> generate_moves() const;
 std::vector<Moves::Move> generate_climber_moves() const;
 std::vector<Moves::Move> generate_quiet_moves() const;
 bool player_has_any_valid_move();
+bool is_valid_move(const Moves::Move &move) const;
 
 int check_state();
 std::string to_text() const;
+
+bool _sanity_check_workers() const;
+
 uint64_t get_hash() const { return _hash; }
 
 // --- Getters for Evaluation ---
@@ -72,7 +76,8 @@ void _dec_block(sq_i s);
 void _restore_block_height(sq_i s, int8_t original_height);
 bool _height_ok(sq_i from,sq_i to) const;
 bool _adj_ok(sq_i from,sq_i to) const;
-std::optional<sq_i> _calculate_push_square(sq_i from_sq,sq_i to_sq);
+
+std::optional<sq_i> _calculate_push_square(sq_i from_sq, sq_i to_sq) const;
 bool _move_checks(sq_i from,sq_i to) const;
 bool _build_ok(sq_i from, sq_i to, sq_i build) const;
 bool _complete_checks(sq_i from, sq_i to, sq_i build) const;
@@ -122,7 +127,8 @@ std::vector<Moves::Move> _generate_quiet_minotaur_moves() const;
 std::vector<Moves::Move> _generate_quiet_pan_moves() const;
 std::vector<Moves::Move> _generate_quiet_prometheus_moves() const;
 
-    
+
+
 friend class ApolloTests_swap_up_one_height_Test;
 friend class ApolloTests_can_only_swap_with_enemy_Test;
 friend class ApolloTests_no_moves_but_apollo_swap_saves_you_Test;
