@@ -32,6 +32,12 @@ inline bool is_mate(int score) {
     return score > (MATE - 100) || score < (-MATE + 100);
 }
 
+struct SearchResult {
+    std::unique_ptr<Moves::Move> best_move = nullptr;
+    int score = 0;
+    long nodes = 0;
+};
+
 struct SearchInfo {
     Board& board;
     int depth;
@@ -327,14 +333,14 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'E');
         } else {
             // Failed to raise alpha, all moves were worse
-            tt.store(search_info.board, *search_info.bestMove, alpha, depth, 'A');
+            tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'A');
         }
     }
 
-    return alpha;
+    return max_score;
 }
 
-inline std::unique_ptr<Moves::Move> get_best_move(
+inline SearchResult get_best_move(
     Board& board,
     int remaining_time_ms,
     TranspositionTable& tt,
@@ -345,6 +351,7 @@ inline std::unique_ptr<Moves::Move> get_best_move(
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int prev_score = 0;
+    long nodes_searched = 0; // To store nodes from last completed iteration
     KillerMoves killers;
 
     for (int depth = 1; ; ++depth) {
@@ -352,12 +359,17 @@ inline std::unique_ptr<Moves::Move> get_best_move(
         int alpha = std::max(-MATE, prev_score - ASP_WINDOW);
         int beta = std::min(MATE, prev_score + ASP_WINDOW);
 
+        SearchInfo si(board, depth, end_time); // Moved outside the while loop
+
         while (true) {
-            SearchInfo si(board, depth, end_time);
             int score = search(si, depth, 0, alpha, beta, tt, killers);
 
             if (si.quit) {
-                return best_move;
+                SearchResult result;
+                result.best_move = std::move(best_move);
+                result.score = prev_score;
+                result.nodes = nodes_searched;
+                return result;
             }
 
             if (score <= alpha) {
@@ -374,20 +386,21 @@ inline std::unique_ptr<Moves::Move> get_best_move(
             break;
         }
 
+        nodes_searched = si.nodes; // Update nodes count after a successful depth search
+
         auto [pv_move_ptr, pv_score_opt] = tt.probe_pv_move(board);
         if (pv_move_ptr != nullptr) {
             best_move =  std::make_unique<Moves::Move>(*pv_move_ptr);
             if(pv_score_opt.has_value()) prev_score = *pv_score_opt;
         }
 
-        if (is_mate(prev_score) || (max_depth.has_value() && depth >= *max_depth)) {
-            return best_move;
-        }
-
-        if (depth >= 100) {
-            return best_move;
+        if (is_mate(prev_score) || (max_depth.has_value() && depth >= *max_depth) || depth >= 100) {
+            SearchResult result;
+            result.best_move = std::move(best_move);
+            result.score = prev_score;
+            result.nodes = nodes_searched;
+            return result;
         }
     }
 }
-
 } // namespace Santorini
