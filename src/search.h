@@ -54,6 +54,22 @@ inline int evaluate(const Board& board) {
     return score_position(board) * board.get_turn();
 }
 
+constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
+    {{
+        {
+            {0, 10, 0, 0}
+        },
+        {
+            {-10, 0, 20, 0}
+        },
+        {
+            {-20, -10, 0, 30}
+        },
+        {
+            {-20, -10, 20, 0}
+        }
+    }};
+
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, KillerMoves& k_moves, int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
@@ -73,7 +89,7 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, Kil
         }
         int from_h = board.get_blocks()[mv.from_sq];
         int to_h = board.get_blocks()[mv.to_sq];
-        mv.score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
+        mv.score = HEIGHT_SCORING[from_h][to_h] + (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
     }
 }
 
