@@ -70,7 +70,33 @@ constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
         }
     }};
 
-inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, KillerMoves& k_moves, int ply) {
+inline bool is_blocking_opponent(const Board& board, Moves::Move& move) {
+    std::array<int, 2> enemies;
+    if (board.get_turn() == 1) {
+        enemies = {2, 3};
+    } else {
+        enemies = {0, 1};
+    }
+
+    int climb_sq = -1;
+    for (int enemy_worker_idx : enemies) {
+        auto worker_sq = board.get_workers()[enemy_worker_idx];
+        auto h = board.get_blocks()[worker_sq];
+        for (auto neighbor_sq : Constants::NEIGHBOURS[worker_sq]) {
+            if (board.get_blocks()[neighbor_sq] == h + 1) {
+                if (climb_sq == -1) {
+                    climb_sq = neighbor_sq;
+                } else {
+                    return false; // Found a second climb option, so it's not a "denial"
+                }
+            }
+        }
+    }
+
+    return climb_sq != -1 && (climb_sq == move.build_sq || climb_sq == move.extra_build_sq);
+}
+
+inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
     auto k3 = k_moves.killers[ply][2];
@@ -89,7 +115,10 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, Kil
         }
         int from_h = board.get_blocks()[mv.from_sq];
         int to_h = board.get_blocks()[mv.to_sq];
-        mv.score = HEIGHT_SCORING[from_h][to_h] + (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
+        int is_blocking = is_blocking_opponent(board, mv);
+        mv.score = HEIGHT_SCORING[from_h][to_h] * 10 +
+            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]) +
+                is_blocking * 50;
     }
 }
 
