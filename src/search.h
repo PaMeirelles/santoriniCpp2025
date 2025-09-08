@@ -106,55 +106,49 @@ inline int block_score(const Board& board, const Moves::Move& move) {
     sq_i ally, enemy_1, enemy_2;
     int mover = board.get_workers_map()[move.from_sq];
     switch (mover) {
-        case 0:
-            ally = 1;
-            enemy_1 = 2;
-            enemy_2 = 3;
-        break;
-        case 1:
-            ally = 0;
-            enemy_1 = 2;
-            enemy_2 = 3;
-        break;
-        case 2:
-            ally = 3;
-            enemy_1 = 0;
-            enemy_2 = 1;
-        break;
-        case 3:
-            ally = 2;
-            enemy_1 = 0;
-            enemy_2 = 1;
-        break;
-
+        case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
+        case 1: ally = 0; enemy_1 = 2; enemy_2 = 3; break;
+        case 2: ally = 3; enemy_1 = 0; enemy_2 = 1; break;
+        case 3: ally = 2; enemy_1 = 0; enemy_2 = 1; break;
     }
-    int score = 0;
 
-    // A helper lambda to score a single build action
-    auto score_single_build = [&](int build_sq, const auto& scoring_matrix) {
-        int build_score = 0;
-        build_score += scoring_matrix[board.get_blocks()[move.to_sq]][build_sq];
+    // This helper lambda calculates the score for a single build action.
+    // It captures the necessary context like the board, workers, and mover's height.
+    auto calculate_build_score_component =
+        [&](sq_i build_sq, const auto& primary_matrix) {
+
+        int component_score = 0;
+        int worker_height = board.get_blocks()[move.to_sq];
+        int build_loc_height = board.get_blocks()[build_sq];
+
+        // Score for the build itself
+        component_score += primary_matrix[worker_height][build_loc_height];
+
+        // Adjust score based on adjacent workers
         if (Moves::is_adjacent(board.get_workers()[ally], build_sq)) {
-            build_score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][build_sq];
+            component_score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
         }
         if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
-            build_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][build_sq];
+            component_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
         }
         if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
-            build_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][build_sq];
+            component_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
         }
-        return build_score;
+
+        return component_score;
     };
 
-    // Score the primary build
-    score += score_single_build(move.build_sq, BLOCK_SCORING_SINGLE);
+    // --- Calculate total score using the helper lambda ---
 
-    // Score the extra build if it exists
+    // 1. Score the primary build
+    int score = calculate_build_score_component(move.build_sq, BLOCK_SCORING_SINGLE);
+
+    // 2. Score the extra build, if it exists
     if (move.extra_build_sq) {
         const auto& matrix = (move.extra_build_sq.value() == move.build_sq)
             ? BLOCK_SCORING_DOUBLE
             : BLOCK_SCORING_SINGLE;
-        score += score_single_build(move.extra_build_sq.value(), matrix);
+        score += calculate_build_score_component(move.extra_build_sq.value(), matrix);
     }
 
     return score;
