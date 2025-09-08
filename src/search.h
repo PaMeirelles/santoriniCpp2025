@@ -102,9 +102,9 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
         }
     }};
 
-inline int block_score(const Board& board, Moves::Move* move) {
+inline int block_score(const Board& board, const Moves::Move& move) {
     sq_i ally, enemy_1, enemy_2;
-    int mover = board.get_workers_map()[move->from_sq];
+    int mover = board.get_workers_map()[move.from_sq];
     switch (mover) {
         case 0:
             ally = 1;
@@ -129,22 +129,37 @@ inline int block_score(const Board& board, Moves::Move* move) {
 
     }
     int score = 0;
-    score += BLOCK_SCORING_SINGLE[board.get_blocks()[move->to_sq]][move->build_sq];
-    score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][move->build_sq];
-    score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][move->build_sq];
-    score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][move->build_sq];
 
-    if (move->extra_build_sq) {
-        const auto& matrix = (move->extra_build_sq == move->build_sq)
+    // A helper lambda to score a single build action
+    auto score_single_build = [&](int build_sq, const auto& scoring_matrix) {
+        int build_score = 0;
+        build_score += scoring_matrix[board.get_blocks()[move.to_sq]][build_sq];
+        if (Moves::is_adjacent(board.get_workers()[ally], build_sq)) {
+            build_score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][build_sq];
+        }
+        if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
+            build_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][build_sq];
+        }
+        if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
+            build_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][build_sq];
+        }
+        return build_score;
+    };
+
+    // Score the primary build
+    score += score_single_build(move.build_sq, BLOCK_SCORING_SINGLE);
+
+    // Score the extra build if it exists
+    if (move.extra_build_sq) {
+        const auto& matrix = (move.extra_build_sq.value() == move.build_sq)
             ? BLOCK_SCORING_DOUBLE
             : BLOCK_SCORING_SINGLE;
-        score += matrix[board.get_blocks()[move->to_sq]][move->extra_build_sq.value()];
-        score += matrix[board.get_blocks()[board.get_workers()[ally]]][move->extra_build_sq.value()];
-        score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][move->extra_build_sq.value()];
-        score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][move->extra_build_sq.value()];
+        score += score_single_build(move.extra_build_sq.value(), matrix);
     }
+
     return score;
 }
+
 
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
     auto k1 = k_moves.killers[ply][0];
@@ -166,7 +181,7 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         int from_h = board.get_blocks()[mv.from_sq];
         int to_h = board.get_blocks()[mv.to_sq];
         mv.score = HEIGHT_SCORING[from_h][to_h] * 200 +
-            block_score(board, &mv) * 10 +
+            block_score(board, mv) * 10 +
             (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
 
     }
