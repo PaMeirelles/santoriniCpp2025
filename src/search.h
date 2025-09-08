@@ -57,43 +57,93 @@ inline int evaluate(const Board& board) {
 constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
     {{
         {
-            {0, 10, 0, 0}
+            {0, 1, 0, 0}
         },
         {
-            {-10, 0, 20, 0}
+            {-1, 0, 2, 0}
         },
         {
-            {-20, -10, 0, 30}
+            {-2, -1, 0, 3}
         },
         {
-            {-20, -10, 20, 0}
+            {-1, 0, 2, 0}
         }
     }};
 
-inline bool is_blocking_opponent(const Board& board, Moves::Move& move) {
-    std::array<int, 2> enemies;
-    if (board.get_turn() == 1) {
-        enemies = {2, 3};
-    } else {
-        enemies = {0, 1};
-    }
-
-    int climb_sq = -1;
-    for (int enemy_worker_idx : enemies) {
-        auto worker_sq = board.get_workers()[enemy_worker_idx];
-        auto h = board.get_blocks()[worker_sq];
-        for (auto neighbor_sq : Constants::NEIGHBOURS[worker_sq]) {
-            if (board.get_blocks()[neighbor_sq] == h + 1) {
-                if (climb_sq == -1) {
-                    climb_sq = neighbor_sq;
-                } else {
-                    return false; // Found a second climb option, so it's not a "denial"
-                }
-            }
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
+    {{
+        {
+            {3, -1, 0, 0}
+        },
+        {
+            {1, 4, -3, 0}
+        },
+        {
+            {0, 2, 5, -4}
+        },
+        {
+            {0, 4, -2, -1}
         }
-    }
+    }};
 
-    return climb_sq != -1 && (climb_sq == move.build_sq || climb_sq == move.extra_build_sq);
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
+    {{
+        {
+            {0, 0, 0, 0}
+        },
+        {
+            {1,-1, -2, 0}
+        },
+        {
+            {1, 2, -1, 0}
+        },
+        {
+            {1, 0, -2, 0}
+        }
+    }};
+
+inline int block_score(const Board& board, Moves::Move* move) {
+    sq_i ally, enemy_1, enemy_2;
+    int mover = board.get_workers_map()[move->from_sq];
+    switch (mover) {
+        case 0:
+            ally = 1;
+            enemy_1 = 2;
+            enemy_2 = 3;
+        break;
+        case 1:
+            ally = 0;
+            enemy_1 = 2;
+            enemy_2 = 3;
+        break;
+        case 2:
+            ally = 3;
+            enemy_1 = 0;
+            enemy_2 = 1;
+        break;
+        case 3:
+            ally = 2;
+            enemy_1 = 0;
+            enemy_2 = 1;
+        break;
+
+    }
+    int score = 0;
+    score += BLOCK_SCORING_SINGLE[board.get_blocks()[move->to_sq]][move->build_sq];
+    score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][move->build_sq];
+    score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][move->build_sq];
+    score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][move->build_sq];
+
+    if (move->extra_build_sq) {
+        const auto& matrix = (move->extra_build_sq == move->build_sq)
+            ? BLOCK_SCORING_DOUBLE
+            : BLOCK_SCORING_SINGLE;
+        score += matrix[board.get_blocks()[move->to_sq]][move->extra_build_sq.value()];
+        score += matrix[board.get_blocks()[board.get_workers()[ally]]][move->extra_build_sq.value()];
+        score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][move->extra_build_sq.value()];
+        score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][move->extra_build_sq.value()];
+    }
+    return score;
 }
 
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
@@ -115,10 +165,10 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         }
         int from_h = board.get_blocks()[mv.from_sq];
         int to_h = board.get_blocks()[mv.to_sq];
-        int is_blocking = is_blocking_opponent(board, mv);
-        mv.score = HEIGHT_SCORING[from_h][to_h] * 10 +
-            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]) +
-                is_blocking * 50;
+        mv.score = HEIGHT_SCORING[from_h][to_h] * 200 +
+            block_score(board, &mv) * 10 +
+            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
+
     }
 }
 
