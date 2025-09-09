@@ -73,16 +73,16 @@ constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
 constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
     {{
         {
-            {3, -1, 0, 0}
+            {8, -2, 0, 0}
         },
         {
-            {1, 4, -3, 0}
+            {2, 16, -8, 0}
         },
         {
-            {0, 2, 5, -4}
+            {0, 16, 32, -32}
         },
         {
-            {0, 4, -2, -1}
+            {0, 16, -4, -2}
         }
     }};
 
@@ -168,7 +168,7 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         // --- Final Score Calculation ---
         int from_h = board.get_blocks()[mv.from_sq];
         int to_h = board.get_blocks()[mv.to_sq];
-        mv.score = HEIGHT_SCORING[from_h][to_h] * 200 +
+        mv.score = HEIGHT_SCORING[from_h][to_h] * 800 +
             current_block_score * 10 +
             (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
     }
