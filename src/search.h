@@ -89,24 +89,26 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
 constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
     {{
         {
-            {-8, 2, 0, 0}
+            {0, 0, 0, 0}
         },
         {
-            {14, -18, -8, 0}
+            {16, -2, -16, 0}
         },
         {
-            {2, 16, -34, 0}
+            {2, 32, -2, 0}
         },
         {
-            {2, -16, 0, 0}
+            {2, 0, -4, 0}
         }
     }};
+
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
     auto k3 = k_moves.killers[ply][2];
     auto current_god = board.get_current_god();
     for (auto& mv : moves) {
+        // Pan's winning move should be scored highly, then we continue to the next move.
         if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
             mv.score = 1000000;
             return;
@@ -136,38 +138,37 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
             default: throw std::invalid_argument("Invalid move");
         }
 
+        // --- Block Scoring Logic (REVISED) ---
         int current_block_score = 0;
         sq_i worker_height = board.get_blocks()[mv.to_sq];
 
-        // 1. Score the primary build
-        sq_i build_loc_height = board.get_blocks()[mv.build_sq];
-        current_block_score += BLOCK_SCORING_SINGLE[worker_height][build_loc_height];
-        if (Moves::is_adjacent(board.get_workers()[ally], mv.build_sq)) {
-            current_block_score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
-        }
-        if (Moves::is_adjacent(board.get_workers()[enemy_1], mv.build_sq)) {
-            current_block_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
-        }
-        if (Moves::is_adjacent(board.get_workers()[enemy_2], mv.build_sq)) {
-            current_block_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
-        }
-
-        // 2. Score the extra build, if it exists
-        if (mv.extra_build_sq) {
-            const auto& matrix = (mv.extra_build_sq.value() == mv.build_sq)
-                ? BLOCK_SCORING_DOUBLE
-                : BLOCK_SCORING_SINGLE;
-            sq_i extra_build_loc_height = board.get_blocks()[mv.extra_build_sq.value()];
-
-            current_block_score += matrix[worker_height][extra_build_loc_height];
-            if (Moves::is_adjacent(board.get_workers()[ally], mv.extra_build_sq.value())) {
-                current_block_score += matrix[board.get_blocks()[board.get_workers()[ally]]][extra_build_loc_height];
+        // Helper lambda to score a single build action based on a given scoring matrix
+        auto score_a_build = [&](sq_i build_sq, const auto& matrix) {
+            int score = 0;
+            sq_i build_loc_height = board.get_blocks()[build_sq];
+            score += matrix[worker_height][build_loc_height];
+            if (Moves::is_adjacent(board.get_workers()[ally], build_sq)) {
+                score += matrix[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
             }
-            if (Moves::is_adjacent(board.get_workers()[enemy_1], mv.extra_build_sq.value())) {
-                current_block_score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][extra_build_loc_height];
+            if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
             }
-            if (Moves::is_adjacent(board.get_workers()[enemy_2], mv.extra_build_sq.value())) {
-                current_block_score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][extra_build_loc_height];
+            if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
+            }
+            return score;
+        };
+
+        // If the extra build is on the same square, use the double scoring matrix for the whole action.
+        if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
+            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOUBLE);
+        } else {
+            // Otherwise, score builds individually using the single scoring matrix.
+            // Score the primary build (always happens)
+            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
+            // Score the second, different-square build if it exists
+            if (mv.extra_build_sq.has_value()) {
+                current_block_score += score_a_build(mv.extra_build_sq.value(), BLOCK_SCORING_SINGLE);
             }
         }
 
