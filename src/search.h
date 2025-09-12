@@ -73,16 +73,16 @@ constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
 constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
     {{
         {
-            {8, -2, 0, 0}
+            {8, -4, 0, 0}
         },
         {
-            {2, 16, -8, 0}
+            {2, 16, -16, 0}
         },
         {
-            {0, 16, 32, -32}
+            {0, 4, 32, -32}
         },
         {
-            {0, 16, -4, -2}
+            {0, 16, -16, -2}
         }
     }};
 
