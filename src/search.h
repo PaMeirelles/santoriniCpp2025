@@ -95,10 +95,10 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
             {14, -18, 0, 0}
         },
         {
-            {2, 16, -34, 32}
+            {2, 16, -34, 0}
         },
         {
-            {2, -16, 0, -2}
+            {2, -16, 0, 0}
         }
     }};
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
