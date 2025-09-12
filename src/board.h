@@ -43,7 +43,7 @@ int8_t get_turn() const { return _turn; }
 bool is_free(sq_i s) const;
 const std::array<Constants::God, 2>& get_gods() const { return _gods; }
 bool get_prevent_up_next_turn() const { return _prevent_up_next_turn; }
-
+Constants::God get_current_god() const {return _turn == 1 ? _gods[0] : _gods[1]; }
 
 private:
 

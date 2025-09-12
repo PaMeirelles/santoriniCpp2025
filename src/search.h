@@ -92,21 +92,25 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
             {0, 0, 0, 0}
         },
         {
-            {1,-1, -2, 0}
+            {16, -2, -8, 0}
         },
         {
-            {1, 2, -1, 0}
+            {2, 32, -2, 0}
         },
         {
-            {1, 0, -2, 0}
+            {2, 0, -4, 0}
         }
     }};
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
     auto k3 = k_moves.killers[ply][2];
-
+    auto current_god = board.get_current_god();
     for (auto& mv : moves) {
+        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
+            mv.score = 1000000;
+            return;
+        }
         // --- Killer Move Heuristic (unchanged) ---
         if (k1.has_value() && *k1==mv) {
             mv.score = 900000;
@@ -123,18 +127,20 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
 
         sq_i ally, enemy_1, enemy_2;
         int mover = board.get_workers_map()[mv.from_sq];
+
         switch (mover) {
             case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
             case 1: ally = 0; enemy_1 = 2; enemy_2 = 3; break;
             case 2: ally = 3; enemy_1 = 0; enemy_2 = 1; break;
             case 3: ally = 2; enemy_1 = 0; enemy_2 = 1; break;
+            default: throw std::invalid_argument("Invalid move");
         }
 
         int current_block_score = 0;
-        int worker_height = board.get_blocks()[mv.to_sq];
+        sq_i worker_height = board.get_blocks()[mv.to_sq];
 
         // 1. Score the primary build
-        int build_loc_height = board.get_blocks()[mv.build_sq];
+        sq_i build_loc_height = board.get_blocks()[mv.build_sq];
         current_block_score += BLOCK_SCORING_SINGLE[worker_height][build_loc_height];
         if (Moves::is_adjacent(board.get_workers()[ally], mv.build_sq)) {
             current_block_score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
@@ -151,23 +157,23 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
             const auto& matrix = (mv.extra_build_sq.value() == mv.build_sq)
                 ? BLOCK_SCORING_DOUBLE
                 : BLOCK_SCORING_SINGLE;
-            int extra_build_loc_height = board.get_blocks()[mv.extra_build_sq.value()];
+            sq_i extra_build_loc_height = board.get_blocks()[mv.extra_build_sq.value()];
 
             current_block_score += matrix[worker_height][extra_build_loc_height];
             if (Moves::is_adjacent(board.get_workers()[ally], mv.extra_build_sq.value())) {
-                current_block_score += BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[ally]]][extra_build_loc_height];
+                current_block_score += matrix[board.get_blocks()[board.get_workers()[ally]]][extra_build_loc_height];
             }
             if (Moves::is_adjacent(board.get_workers()[enemy_1], mv.extra_build_sq.value())) {
-                current_block_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_1]]][extra_build_loc_height];
+                current_block_score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][extra_build_loc_height];
             }
             if (Moves::is_adjacent(board.get_workers()[enemy_2], mv.extra_build_sq.value())) {
-                current_block_score -= BLOCK_SCORING_SINGLE[board.get_blocks()[board.get_workers()[enemy_2]]][extra_build_loc_height];
+                current_block_score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][extra_build_loc_height];
             }
         }
 
         // --- Final Score Calculation ---
-        int from_h = board.get_blocks()[mv.from_sq];
-        int to_h = board.get_blocks()[mv.to_sq];
+        const sq_i from_h = board.get_blocks()[mv.from_sq];
+        const sq_i to_h = board.get_blocks()[mv.to_sq];
         mv.score = HEIGHT_SCORING[from_h][to_h] * 800 +
             current_block_score * 10 +
             (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
