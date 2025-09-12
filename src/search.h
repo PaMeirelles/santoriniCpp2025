@@ -92,7 +92,7 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
             {-8, 2, 0, 0}
         },
         {
-            {14, -18, 0, 0}
+            {14, -18, -8, 0}
         },
         {
             {2, 16, -34, 0}
