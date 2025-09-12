@@ -102,6 +102,23 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
         }
     }};
 
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOME =
+    {{
+        {
+            {0, 0, 0, 0}
+        },
+        {
+            {0, -2, -16, 0}
+        },
+        {
+            {0, 0, -2, -32}
+        },
+        {
+            {0, 0, -4, 0}
+        }
+    }};
+
+
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
@@ -163,10 +180,12 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
             current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOUBLE);
         } else {
-            // Otherwise, score builds individually using the single scoring matrix.
-            // Score the primary build (always happens)
-            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
-            // Score the second, different-square build if it exists
+            if (mv.dome) {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOME);
+            }
+            else {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
+            }
             if (mv.extra_build_sq.has_value()) {
                 current_block_score += score_a_build(mv.extra_build_sq.value(), BLOCK_SCORING_SINGLE);
             }
