@@ -168,10 +168,10 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
                 score += matrix[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
             }
             if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
-                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height] * 1.2;
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
             }
             if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
-                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height] * 1.2;
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
             }
             return score;
         };
