@@ -73,7 +73,7 @@ constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
 constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
     {{
         {
-            {8, -4, 0, 0}
+            {8, -8, 0, 0}
         },
         {
             {2, 16, -16, 0}
@@ -168,10 +168,10 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
                 score += matrix[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
             }
             if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
-                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height] * 1.5;
             }
             if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
-                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height] * 1.5;
             }
             return score;
         };
