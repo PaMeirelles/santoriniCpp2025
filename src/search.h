@@ -217,7 +217,7 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
 int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
     KillerMoves& k_moves, bool allow_null = true);
 
-inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
+inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -227,7 +227,7 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
 
     int state = search_info.board.check_state();
     if (state != 0) {
-        return (state == search_info.board.get_turn()) ? MATE - 1 : -MATE + 1;
+        return (state == search_info.board.get_turn()) ? MATE - ply : -MATE + ply;
     }
 
     int stand_pat = evaluate(search_info.board);
@@ -238,36 +238,20 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         alpha = stand_pat;
     }
 
-    // Use a simple boolean array for tracking visited squares.
-    // It's much faster than std::set for this purpose.
-    bool worker_move_searched[25] = {false};
-    auto moves = search_info.board.generate_moves();
+    auto climber_moves = search_info.board.generate_climber_moves();
+    bool visited_to_sq[25] = {false};
 
-    for (auto& move : moves) {
-        // If we've already searched a move for the worker on this starting square, skip.
-        if (worker_move_searched[move.from_sq]) {
+    score_moves(climber_moves, search_info.board, k_moves, ply);
+
+    for (size_t i = 0; i < climber_moves.size(); ++i) {
+        pick_move(climber_moves, i);
+        auto& move = climber_moves[i];
+        if (visited_to_sq[move.to_sq]) {
             continue;
         }
-
-        int from_h = search_info.board.get_blocks()[move.from_sq];
-        int to_h = search_info.board.get_blocks()[move.to_sq];
-
-        int god_index = (search_info.board.get_turn() == 1) ? 0 : 1;
-        Constants::God god = search_info.board.get_gods()[god_index];
-
-        bool is_climb = to_h > from_h;
-        bool is_pan_drop = (god == Constants::God::PAN && from_h - to_h >= 2);
-
-        // Only search "non-quiet" moves like climbs or special god moves.
-        if (!(is_climb || is_pan_drop)) {
-            continue;
-        }
-
         search_info.board.make_move(move);
-        // Mark this worker's starting square as searched for this node.
-        worker_move_searched[move.from_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha);
-
+        visited_to_sq[move.to_sq] = true;
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
@@ -301,7 +285,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
     if (depth <= 0) {
 
-        return qsearch(search_info, alpha, beta);
+        return qsearch(search_info, alpha, beta, k_moves, ply);
     }
 
     // Null Move Pruning
@@ -317,7 +301,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
     }
     std::optional<Moves::Move> tt_move_opt;
-    std::optional<int> tt_score_opt; // Or whatever your score type is
+    std::optional<int> tt_score_opt;
     bool tt_hit = tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt);
     // If the probe returns a score, it's a valid cutoff.
     if (tt_hit) {

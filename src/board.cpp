@@ -1701,7 +1701,10 @@ std::vector<Moves::Move> Board::_generate_climber_pan_moves() const {
     sq_i from_sq = _workers[start_idx + i];
 
     for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
+      if (_blocks[to_sq] <= _blocks[from_sq] &&
+        // This is not a climber but is wincon
+        !(_blocks[to_sq] == 0 && _blocks[from_sq] >= 2)
+      ) continue; // Climber check
       if (_blocked_by_athena(from_sq, to_sq)) continue;
       if (!_move_checks(from_sq, to_sq)) continue;
 
@@ -1723,7 +1726,10 @@ std::vector<Moves::Move> Board::_generate_quiet_pan_moves() const {
     sq_i from_sq = _workers[start_idx + i];
 
     for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
+      if (_blocks[to_sq] > _blocks[from_sq] ||
+        // This is quiet but is wincon
+        !(_blocks[to_sq] == 0 && _blocks[from_sq] >= 2)
+      ) continue; // Quiet check
       if (_blocked_by_athena(from_sq, to_sq)) continue;
       if (!_move_checks(from_sq, to_sq)) continue;
 
