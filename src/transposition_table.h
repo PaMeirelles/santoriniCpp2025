@@ -55,29 +55,48 @@ public:
         table[idx].emplace(key, move, depth, score, flag);
     }
 
-    std::pair<const Moves::Move*, std::optional<int>> probe(const Board& board, int alpha, int beta, int depth) {
+    bool probe(const Board& board, int alpha, int beta, int depth, std::optional<Moves::Move>* move,
+        std::optional<int> *score) {
         uint64_t key = board.get_hash();
         size_t index = key % num_entries;
         const auto& entry_opt = table[index];
 
-        if (entry_opt && entry_opt->hash_key == key && entry_opt->depth >= depth) {
+        if (entry_opt && entry_opt->hash_key == key) {
             hits++;
             const TTEntry& entry = *entry_opt;
-            const Moves::Move* move_ptr = entry.move ? &(*entry.move) : nullptr;
+            if (entry.move) {
+                *move = *entry.move; // Copy the move if it exists
+            }
+            // If the stored search depth is sufficient, we can potentially use the score for a cutoff.
+            if (entry.depth >= depth) {
+                if (entry.flag == 'A' && entry.score <= alpha) {
+                    cuts++;
+                    // The stored score is an upper bound and is already too low.
+                    *score = alpha;
+                    return true;
+                }
+                if (entry.flag == 'B' && entry.score >= beta) {
+                    cuts++;
+                    // The stored score is a lower bound and is already high enough for a cutoff.
+                    *score = beta;
+                    return true;
+                }
+                if (entry.flag == 'E') {
+                    // We found an exact score from a search of the same or greater depth.
+                    *score = entry.score;
+                    return true;
+                }
+            }
 
-            if (entry.flag == 'A' && entry.score <= alpha) {
-                cuts++;
-                return {move_ptr, alpha};
-            }
-            if (entry.flag == 'B' && entry.score >= beta) {
-                cuts++;
-                return {move_ptr, beta};
-            }
-            if (entry.flag == 'E') {
-                return {move_ptr, entry.score};
-            }
+            // If we couldn't cause a cutoff but found a matching entry,
+            // return the move anyway to help with move ordering.
+            *score = std::nullopt;
+            return false;
         }
-        return {nullptr, std::nullopt};
+
+        // No matching entry was found.
+        *score = std::nullopt;
+        return false;
     }
 
     std::pair<const Moves::Move*, std::optional<int>> probe_pv_move(const Board& board) {

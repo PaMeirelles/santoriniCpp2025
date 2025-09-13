@@ -11,6 +11,7 @@
 #include "moves.h"
 #include "transposition_table.h"
 #include "evaluation.h"
+#include "killer_moves.h"
 
 namespace Santorini {
 
@@ -31,6 +32,12 @@ inline bool is_mate(int score) {
     return score > (MATE - 100) || score < (-MATE + 100);
 }
 
+struct SearchResult {
+    std::unique_ptr<Moves::Move> best_move = nullptr;
+    int score = 0;
+    long nodes = 0;
+};
+
 struct SearchInfo {
     Board& board;
     int depth;
@@ -47,11 +54,149 @@ inline int evaluate(const Board& board) {
     return score_position(board) * board.get_turn();
 }
 
-inline void score_moves(std::vector<Moves::Move> &moves, const Board& board) {
+constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
+    {{
+        {
+            {0, 1, 3, 0}
+        },
+        {
+            {-1, 0, 2, 4}
+        },
+        {
+            {-2, -1, 0, 4}
+        },
+        {
+            {-1, 0, 2, 0}
+        }
+    }};
+
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
+    {{
+        {
+            {8, -8, 0, 0}
+        },
+        {
+            {2, 16, -16, 0}
+        },
+        {
+            {0, 4, 32, -32}
+        },
+        {
+            {0, 16, -16, -2}
+        }
+    }};
+
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
+    {{
+        {
+            {0, 0, 0, 0}
+        },
+        {
+            {16, -2, -16, 0}
+        },
+        {
+            {2, 32, -2, 0}
+        },
+        {
+            {2, 0, -4, 0}
+        }
+    }};
+
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOME =
+    {{
+        {
+            {0, 0, 0, 0}
+        },
+        {
+            {0, -2, -16, 0}
+        },
+        {
+            {0, 0, -2, -32}
+        },
+        {
+            {0, 0, -4, 0}
+        }
+    }};
+
+
+inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
+    auto k1 = k_moves.killers[ply][0];
+    auto k2 = k_moves.killers[ply][1];
+    auto k3 = k_moves.killers[ply][2];
+    auto current_god = board.get_current_god();
     for (auto& mv : moves) {
-        int from_h = board.get_blocks()[mv.from_sq];
-        int to_h = board.get_blocks()[mv.to_sq];
-        mv.score = (to_h - from_h) * 10 + (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
+        // Pan's winning move should be scored highly, then we continue to the next move.
+        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
+            mv.score = 1000000;
+            return;
+        }
+        // --- Killer Move Heuristic (unchanged) ---
+        if (k1.has_value() && *k1==mv) {
+            mv.score = 900000;
+            continue;
+        }
+        if (k2.has_value() && *k2==mv) {
+            mv.score = 800000;
+            continue;
+        }
+        if (k3.has_value() && *k3==mv) {
+            mv.score = 700000;
+            continue;
+        }
+
+        sq_i ally, enemy_1, enemy_2;
+        int mover = board.get_workers_map()[mv.from_sq];
+
+        switch (mover) {
+            case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
+            case 1: ally = 0; enemy_1 = 2; enemy_2 = 3; break;
+            case 2: ally = 3; enemy_1 = 0; enemy_2 = 1; break;
+            case 3: ally = 2; enemy_1 = 0; enemy_2 = 1; break;
+            default: throw std::invalid_argument("Invalid move");
+        }
+
+        // --- Block Scoring Logic (REVISED) ---
+        int current_block_score = 0;
+        sq_i worker_height = board.get_blocks()[mv.to_sq];
+
+        // Helper lambda to score a single build action based on a given scoring matrix
+        auto score_a_build = [&](sq_i build_sq, const auto& matrix) {
+            int score = 0;
+            sq_i build_loc_height = board.get_blocks()[build_sq];
+            score += matrix[worker_height][build_loc_height];
+            if (Moves::is_adjacent(board.get_workers()[ally], build_sq)) {
+                score += matrix[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
+            }
+            if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
+            }
+            if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
+            }
+            return score;
+        };
+
+        // If the extra build is on the same square, use the double scoring matrix for the whole action.
+        if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
+            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOUBLE);
+        } else {
+            if (mv.dome) {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOME);
+            }
+            else {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
+            }
+            if (mv.extra_build_sq.has_value()) {
+                current_block_score += score_a_build(mv.extra_build_sq.value(), BLOCK_SCORING_SINGLE);
+            }
+        }
+
+        // --- Final Score Calculation ---
+        const sq_i from_h = board.get_blocks()[mv.from_sq];
+        const sq_i to_h = board.get_blocks()[mv.to_sq];
+        mv.score = HEIGHT_SCORING[from_h][to_h] * 800 +
+            current_block_score * 10 +
+            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
     }
 }
 
@@ -69,9 +214,10 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
     }
 }
 
-int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt, bool allow_null = true);
+int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
+    KillerMoves& k_moves, bool allow_null = true);
 
-inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
+inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -81,7 +227,7 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
 
     int state = search_info.board.check_state();
     if (state != 0) {
-        return (state == search_info.board.get_turn()) ? MATE - 1 : -MATE + 1;
+        return (state == search_info.board.get_turn()) ? MATE - ply : -MATE + ply;
     }
 
     int stand_pat = evaluate(search_info.board);
@@ -92,36 +238,20 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
         alpha = stand_pat;
     }
 
-    // Use a simple boolean array for tracking visited squares.
-    // It's much faster than std::set for this purpose.
-    bool worker_move_searched[25] = {false};
-    auto moves = search_info.board.generate_moves();
+    auto climber_moves = search_info.board.generate_climber_moves();
+    bool visited_to_sq[25] = {false};
 
-    for (auto& move : moves) {
-        // If we've already searched a move for the worker on this starting square, skip.
-        if (worker_move_searched[move.from_sq]) {
+    score_moves(climber_moves, search_info.board, k_moves, ply);
+
+    for (size_t i = 0; i < climber_moves.size(); ++i) {
+        pick_move(climber_moves, i);
+        auto& move = climber_moves[i];
+        if (visited_to_sq[move.to_sq]) {
             continue;
         }
-
-        int from_h = search_info.board.get_blocks()[move.from_sq];
-        int to_h = search_info.board.get_blocks()[move.to_sq];
-
-        int god_index = (search_info.board.get_turn() == 1) ? 0 : 1;
-        Constants::God god = search_info.board.get_gods()[god_index];
-
-        bool is_climb = to_h > from_h;
-        bool is_pan_drop = (god == Constants::God::PAN && from_h - to_h >= 2);
-
-        // Only search "non-quiet" moves like climbs or special god moves.
-        if (!(is_climb || is_pan_drop)) {
-            continue;
-        }
-
         search_info.board.make_move(move);
-        // Mark this worker's starting square as searched for this node.
-        worker_move_searched[move.from_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha);
-
+        visited_to_sq[move.to_sq] = true;
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
@@ -137,22 +267,25 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta) {
     return alpha;
 }
 
-inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt, bool allow_null) {
+inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta,
+    TranspositionTable& tt, KillerMoves& k_moves, bool allow_null) {
     search_info.nodes++;
-
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
         search_info.quit = true;
         search_info.bestMove = nullptr;
+
         return 0;
     }
 
     int state = search_info.board.check_state();
     if (state != 0) {
+
         return (state == search_info.board.get_turn()) ? MATE - ply : -MATE + ply;
     }
 
     if (depth <= 0) {
-        return qsearch(search_info, alpha, beta);
+
+        return qsearch(search_info, alpha, beta, k_moves, ply);
     }
 
     // Null Move Pruning
@@ -160,15 +293,18 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         bool prevent_up = search_info.board.get_prevent_up_next_turn();
         search_info.board.make_null_move();
         int score = -search(search_info, depth - 1 - adaptive_null_reduction(ply),
-                        ply + 1, -beta, -beta + 1, tt, false);
+                        ply + 1, -beta, -beta + 1, tt, k_moves, false);
         search_info.board.unmake_null_move(prevent_up);
         if (score >= beta) {
+
             return beta;
         }
     }
-
-    auto [tt_move_ptr, tt_score_opt] = tt.probe(search_info.board, alpha, beta, depth);
-    if (tt_move_ptr != nullptr) {
+    std::optional<Moves::Move> tt_move_opt;
+    std::optional<int> tt_score_opt;
+    bool tt_hit = tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt);
+    // If the probe returns a score, it's a valid cutoff.
+    if (tt_hit) {
         return *tt_score_opt;
     }
 
@@ -176,20 +312,60 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int original_alpha = alpha;
 
+    // --- Phase 0: Search TT move first if it exists ---
+    if (tt_move_opt.has_value()) {
+        const Moves::Move& move = *tt_move_opt;
+        if (search_info.board.is_valid_move(move)) {
+            search_info.board.make_move(move);
+
+
+            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+
+            search_info.board.unmake_move(move);
+
+            if (search_info.quit) {
+                search_info.bestMove = nullptr;
+
+                return 0;
+            }
+
+            if (curr_score > max_score) {
+                max_score = curr_score;
+                best_move = std::make_unique<Moves::Move>(move);
+                if (max_score > alpha) {
+                    if (max_score >= beta) {
+                        search_info.bestMove = std::move(best_move);
+                        tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+
+                        return beta; // Beta cutoff from TT move
+                    }
+                    alpha = max_score;
+                }
+            }
+        }
+    }
+
+
     // --- Phase 1: Generate and search climber moves first ---
     auto climber_moves = search_info.board.generate_climber_moves();
-    score_moves(climber_moves, search_info.board);
+    score_moves(climber_moves, search_info.board, k_moves, ply);
 
     for (size_t i = 0; i < climber_moves.size(); ++i) {
         pick_move(climber_moves, i);
         auto& move = climber_moves[i];
 
+        // Skip if this is the TT move we already searched
+        if (tt_move_opt.has_value() && move == *tt_move_opt) {
+            continue;
+        }
+
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
+
             return 0;
         }
 
@@ -201,6 +377,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                     // Beta cutoff from a climber move
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+
                     return beta;
                 }
                 alpha = max_score;
@@ -211,23 +388,30 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     // --- Phase 2: Generate and search quiet moves ---
     auto quiet_moves = search_info.board.generate_quiet_moves();
 
-    // Check for loss (no moves available) only after checking both lists
-    if (climber_moves.empty() && quiet_moves.empty()) {
+    // Check for loss (no moves available). This is adjusted to not fire if we found a TT move.
+    if (best_move == nullptr && climber_moves.empty() && quiet_moves.empty()) {
+
         return -MATE + ply;
     }
 
-    score_moves(quiet_moves, search_info.board);
+    score_moves(quiet_moves, search_info.board, k_moves, ply);
 
     for (size_t i = 0; i < quiet_moves.size(); ++i) {
         pick_move(quiet_moves, i);
         auto& move = quiet_moves[i];
 
+        // Skip if this is the TT move we already searched
+        if (tt_move_opt.has_value() && move == *tt_move_opt) {
+            continue;
+        }
+
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt);
+        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
+
             return 0;
         }
 
@@ -237,8 +421,10 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             if (max_score > alpha) {
                 if (max_score >= beta) {
                     // Beta cutoff from a quiet move
+                    k_moves.add(ply, move);
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
+
                     return beta;
                 }
                 alpha = max_score;
@@ -254,14 +440,14 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'E');
         } else {
             // Failed to raise alpha, all moves were worse
-            tt.store(search_info.board, *search_info.bestMove, alpha, depth, 'A');
+            tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'A');
         }
     }
 
-    return alpha;
+    return max_score;
 }
 
-inline std::unique_ptr<Moves::Move> get_best_move(
+inline SearchResult get_best_move(
     Board& board,
     int remaining_time_ms,
     TranspositionTable& tt,
@@ -272,17 +458,25 @@ inline std::unique_ptr<Moves::Move> get_best_move(
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int prev_score = 0;
+    long nodes_searched = 0; // To store nodes from last completed iteration
+    KillerMoves killers;
 
     for (int depth = 1; ; ++depth) {
+        killers.clear();
         int alpha = std::max(-MATE, prev_score - ASP_WINDOW);
         int beta = std::min(MATE, prev_score + ASP_WINDOW);
 
+        SearchInfo si(board, depth, end_time); // Moved outside the while loop
+
         while (true) {
-            SearchInfo si(board, depth, end_time);
-            int score = search(si, depth, 0, alpha, beta, tt);
+            int score = search(si, depth, 0, alpha, beta, tt, killers);
 
             if (si.quit) {
-                return best_move;
+                SearchResult result;
+                result.best_move = std::move(best_move);
+                result.score = prev_score;
+                result.nodes = nodes_searched;
+                return result;
             }
 
             if (score <= alpha) {
@@ -299,20 +493,21 @@ inline std::unique_ptr<Moves::Move> get_best_move(
             break;
         }
 
+        nodes_searched = si.nodes; // Update nodes count after a successful depth search
+
         auto [pv_move_ptr, pv_score_opt] = tt.probe_pv_move(board);
         if (pv_move_ptr != nullptr) {
             best_move =  std::make_unique<Moves::Move>(*pv_move_ptr);
             if(pv_score_opt.has_value()) prev_score = *pv_score_opt;
         }
 
-        if (is_mate(prev_score) || (max_depth.has_value() && depth >= *max_depth)) {
-            return best_move;
-        }
-
-        if (depth >= 100) {
-            return best_move;
+        if (is_mate(prev_score) || (max_depth.has_value() && depth >= *max_depth) || depth >= 100) {
+            SearchResult result;
+            result.best_move = std::move(best_move);
+            result.score = prev_score;
+            result.nodes = nodes_searched;
+            return result;
         }
     }
 }
-
 } // namespace Santorini
