@@ -6,7 +6,7 @@
 namespace Santorini::Moves {
 
 
-    bool is_adjacent(sq_i s1, sq_i s2) {
+    bool is_adjacent(const sq_i s1, const sq_i s2) {
         if (s1 == s2) return false;
         const auto r1 = s1 % 5;
         const auto c1 = s1 / 5;
