@@ -54,168 +54,140 @@ inline int evaluate(const Board& board) {
     return score_position(board) * board.get_turn();
 }
 
-constexpr std::array<std::array<int, 5>, 4> HEIGHT_SCORING =
+constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
     {{
         {
-            {0, 1, 3, 0, 0}
+            {0, 1, 3, 0}
         },
         {
-            {-1, 0, 2, 4, 0}
+            {-1, 0, 2, 4}
         },
         {
-            {-2, -1, 0, 4, 0}
+            {-2, -1, 0, 4}
         },
         {
-            {-1, 0, 2, 0, 0}
+            {-1, 0, 2, 0}
         }
     }};
 
-constexpr std::array<std::array<int, 5>, 4> BLOCK_SCORING_SINGLE =
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
     {{
         {
-            {8, -8, 0, 0, 0}
+            {8, -8, 0, 0}
         },
         {
-            {2, 16, -16, 0, 0}
+            {2, 16, -16, 0}
         },
         {
-            {0, 4, 32, -32, 0}
+            {0, 4, 32, -32}
         },
         {
-            {0, 16, -16, -2, 0}
+            {0, 16, -16, -2}
         }
     }};
 
-constexpr std::array<std::array<int, 5>, 4> BLOCK_SCORING_DOUBLE =
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
     {{
         {
-            {0, 0, 0, 0, 0}
+            {0, 0, 0, 0}
         },
         {
-            {16, -2, -16, 0, 0}
+            {16, -2, -16, 0}
         },
         {
-            {2, 32, -2, 0, 0}
+            {2, 32, -2, 0}
         },
         {
-            {2, 0, -4, 0, 0}
+            {2, 0, -4, 0}
         }
     }};
 
-constexpr std::array<std::array<int, 5>, 4> BLOCK_SCORING_DOME =
+constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOME =
     {{
         {
-            {0, 0, 0, 0, 0}
+            {0, 0, 0, 0}
         },
         {
-            {0, -2, -16, 0, 0}
+            {0, -2, -16, 0}
         },
         {
-            {0, 0, -2, -32, 0}
+            {0, 0, -2, -32}
         },
         {
-            {0, 0, -4, 0, 0}
+            {0, 0, -4, 0}
         }
     }};
 
 
-// --- Helper Struct for Move Scoring Cache (Moved Outside) ---
-struct InfluenceCache {
-    static constexpr int CACHE_SENTINEL = 30000;
-
-    std::array<int, 25> single_build;
-    std::array<int, 25> double_build;
-    std::array<int, 25> dome_build;
-
-    InfluenceCache() {
-        single_build.fill(CACHE_SENTINEL);
-        double_build.fill(CACHE_SENTINEL);
-        dome_build.fill(CACHE_SENTINEL);
-    }
-};
-
-inline void score_moves(std::vector<Moves::Move>& moves, const Board& board, const KillerMoves& k_moves, const int ply) {
-    if (moves.empty()) {
-        return;
-    }
-
+inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
     auto k1 = k_moves.killers[ply][0];
     auto k2 = k_moves.killers[ply][1];
     auto k3 = k_moves.killers[ply][2];
     auto current_god = board.get_current_god();
-
-    // The cache is now an instance of the struct defined outside the function.
-    std::array<InfluenceCache, 4> influence_cache;
-
-    // Helper lambda to get influence: checks cache, computes if necessary, then returns value.
-    auto get_influence = [&](int mover, sq_i build_sq, const auto& matrix, std::array<int, 25>& cache) -> int {
-        if (cache[build_sq] != InfluenceCache::CACHE_SENTINEL) {
-            return cache[build_sq]; // Cache Hit
+    for (auto& mv : moves) {
+        // Pan's winning move should be scored highly, then we continue to the next move.
+        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
+            mv.score = 1000000;
+            return;
+        }
+        // --- Killer Move Heuristic (unchanged) ---
+        if (k1.has_value() && *k1==mv) {
+            mv.score = 900000;
+            continue;
+        }
+        if (k2.has_value() && *k2==mv) {
+            mv.score = 800000;
+            continue;
+        }
+        if (k3.has_value() && *k3==mv) {
+            mv.score = 700000;
+            continue;
         }
 
-        // Cache Miss: Compute, store, and return
         sq_i ally, enemy_1, enemy_2;
+        int mover = board.get_workers_map()[mv.from_sq];
+
         switch (mover) {
             case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
             case 1: ally = 0; enemy_1 = 2; enemy_2 = 3; break;
             case 2: ally = 3; enemy_1 = 0; enemy_2 = 1; break;
             case 3: ally = 2; enemy_1 = 0; enemy_2 = 1; break;
-            default: throw std::runtime_error("Invalid mover index");
+            default: throw std::invalid_argument("Invalid move");
         }
 
-        const auto& workers = board.get_workers();
-        const auto& blocks = board.get_blocks();
-        int influence = 0;
-        sq_i build_h = blocks[build_sq];
-
-        // Ally contribution
-        if (Moves::is_adjacent(workers[ally], build_sq)) {
-            influence += matrix[blocks[workers[ally]]][build_h];
-        }
-        // Enemy contributions
-        if (Moves::is_adjacent(workers[enemy_1], build_sq)) {
-            influence -= matrix[blocks[workers[enemy_1]]][build_h];
-        }
-        if (Moves::is_adjacent(workers[enemy_2], build_sq)) {
-            influence -= matrix[blocks[workers[enemy_2]]][build_h];
-        }
-
-        cache[build_sq] = influence; // Store result in cache
-        return influence;
-    };
-
-    for (auto& mv : moves) {
-        // --- High-Priority Scoring (Pan Win & Killer Moves) ---
-        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
-            mv.score = 1000000; continue;
-        }
-        if (k1.has_value() && *k1 == mv) { mv.score = 900000; continue; }
-        if (k2.has_value() && *k2 == mv) { mv.score = 800000; continue; }
-        if (k3.has_value() && *k3 == mv) { mv.score = 700000; continue; }
-
-        // --- Block Scoring using On-Demand Caching ---
-        int mover = board.get_workers_map()[mv.from_sq];
+        // --- Block Scoring Logic (REVISED) ---
         int current_block_score = 0;
-        const sq_i worker_h = board.get_blocks()[mv.to_sq];
+        sq_i worker_height = board.get_blocks()[mv.to_sq];
 
-        if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
-            // Hephaestus-style double build
-            int influence = get_influence(mover, mv.build_sq, BLOCK_SCORING_DOUBLE, influence_cache[mover].double_build);
-            current_block_score = BLOCK_SCORING_DOUBLE[worker_h][board.get_blocks()[mv.build_sq]] + influence;
-        } else {
-            // Standard build or Atlas dome
-            if (mv.dome) {
-                int influence = get_influence(mover, mv.build_sq, BLOCK_SCORING_DOME, influence_cache[mover].dome_build);
-                current_block_score = BLOCK_SCORING_DOME[worker_h][board.get_blocks()[mv.build_sq]] + influence;
-            } else {
-                int influence = get_influence(mover, mv.build_sq, BLOCK_SCORING_SINGLE, influence_cache[mover].single_build);
-                current_block_score = BLOCK_SCORING_SINGLE[worker_h][board.get_blocks()[mv.build_sq]] + influence;
+        // Helper lambda to score a single build action based on a given scoring matrix
+        auto score_a_build = [&](sq_i build_sq, const auto& matrix) {
+            int score = 0;
+            sq_i build_loc_height = board.get_blocks()[build_sq];
+            score += matrix[worker_height][build_loc_height];
+            if (Moves::is_adjacent(board.get_workers()[ally], build_sq)) {
+                score += matrix[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
             }
-            // Demeter/Prometheus-style extra build
+            if (Moves::is_adjacent(board.get_workers()[enemy_1], build_sq)) {
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
+            }
+            if (Moves::is_adjacent(board.get_workers()[enemy_2], build_sq)) {
+                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
+            }
+            return score;
+        };
+
+        // If the extra build is on the same square, use the double scoring matrix for the whole action.
+        if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
+            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOUBLE);
+        } else {
+            if (mv.dome) {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOME);
+            }
+            else {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
+            }
             if (mv.extra_build_sq.has_value()) {
-                const sq_i extra_build_sq = mv.extra_build_sq.value();
-                int influence = get_influence(mover, extra_build_sq, BLOCK_SCORING_SINGLE, influence_cache[mover].single_build);
-                current_block_score += BLOCK_SCORING_SINGLE[worker_h][board.get_blocks()[extra_build_sq]] + influence;
+                current_block_score += score_a_build(mv.extra_build_sq.value(), BLOCK_SCORING_SINGLE);
             }
         }
 
@@ -223,8 +195,8 @@ inline void score_moves(std::vector<Moves::Move>& moves, const Board& board, con
         const sq_i from_h = board.get_blocks()[mv.from_sq];
         const sq_i to_h = board.get_blocks()[mv.to_sq];
         mv.score = HEIGHT_SCORING[from_h][to_h] * 800 +
-                   current_block_score * 10 +
-                   (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
+            current_block_score * 10 +
+            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
     }
 }
 
