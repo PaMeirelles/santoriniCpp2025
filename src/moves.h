@@ -64,12 +64,13 @@ namespace Moves {
       sq_i to_sq;
       sq_i build_sq;
       bool dome = false;
+      bool winning = false;
 
       // Some gods
       std::optional<sq_i> extra_build_sq;
 
       // Reversibility
-      std::optional<int> atlas_original_height;
+      std::optional<int> original_height;
       bool minotaur_pushed = false;
 
     Move(const sq_i from_sq,

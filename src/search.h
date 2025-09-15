@@ -224,12 +224,6 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         search_info.quit = true;
         return 0;
     }
-
-    int state = search_info.board.check_state();
-    if (state != 0) {
-        return (state == search_info.board.get_turn()) ? MATE - ply : -MATE + ply;
-    }
-
     int stand_pat = evaluate(search_info.board);
     if (stand_pat >= beta) {
         return beta;
@@ -239,8 +233,18 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
     }
 
     auto climber_moves = search_info.board.generate_climber_moves();
-    bool visited_to_sq[25] = {false};
 
+    if (climber_moves.empty()) {
+        return stand_pat;
+    }
+
+    for (const auto& move : climber_moves) {
+        if (move.winning) {
+            return MATE - ply;
+        }
+    }
+
+    bool visited_to_sq[25] = {false};
     score_moves(climber_moves, search_info.board, k_moves, ply);
 
     for (size_t i = 0; i < climber_moves.size(); ++i) {
@@ -273,18 +277,9 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
         search_info.quit = true;
         search_info.bestMove = nullptr;
-
         return 0;
     }
-
-    int state = search_info.board.check_state();
-    if (state != 0) {
-
-        return (state == search_info.board.get_turn()) ? MATE - ply : -MATE + ply;
-    }
-
     if (depth <= 0) {
-
         return qsearch(search_info, alpha, beta, k_moves, ply);
     }
 
@@ -296,14 +291,12 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                         ply + 1, -beta, -beta + 1, tt, k_moves, false);
         search_info.board.unmake_null_move(prevent_up);
         if (score >= beta) {
-
             return beta;
         }
     }
     std::optional<Moves::Move> tt_move_opt;
     std::optional<int> tt_score_opt;
     bool tt_hit = tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt);
-    // If the probe returns a score, it's a valid cutoff.
     if (tt_hit) {
         return *tt_score_opt;
     }
@@ -312,20 +305,21 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int original_alpha = alpha;
 
-    // --- Phase 0: Search TT move first if it exists ---
     if (tt_move_opt.has_value()) {
         const Moves::Move& move = *tt_move_opt;
         if (search_info.board.is_valid_move(move)) {
+            if (move.winning) {
+                tt.store(search_info.board, move, MATE - ply, depth, 'E');
+                search_info.bestMove = std::make_unique<Moves::Move>(move);
+                return MATE - ply;
+            }
+
             search_info.board.make_move(move);
-
-
             int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
-
             search_info.board.unmake_move(move);
 
             if (search_info.quit) {
                 search_info.bestMove = nullptr;
-
                 return 0;
             }
 
@@ -336,8 +330,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
                     if (max_score >= beta) {
                         search_info.bestMove = std::move(best_move);
                         tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-
-                        return beta; // Beta cutoff from TT move
+                        return beta;
                     }
                     alpha = max_score;
                 }
@@ -345,8 +338,6 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
     }
 
-
-    // --- Phase 1: Generate and search climber moves first ---
     auto climber_moves = search_info.board.generate_climber_moves();
     score_moves(climber_moves, search_info.board, k_moves, ply);
 
@@ -354,9 +345,14 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         pick_move(climber_moves, i);
         auto& move = climber_moves[i];
 
-        // Skip if this is the TT move we already searched
         if (tt_move_opt.has_value() && move == *tt_move_opt) {
             continue;
+        }
+
+        if (move.winning) {
+            tt.store(search_info.board, move, MATE - ply, depth, 'E');
+            search_info.bestMove = std::make_unique<Moves::Move>(move);
+            return MATE - ply;
         }
 
         search_info.board.make_move(move);
@@ -365,7 +361,6 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
-
             return 0;
         }
 
@@ -374,10 +369,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             best_move = std::make_unique<Moves::Move>(move);
             if (max_score > alpha) {
                 if (max_score >= beta) {
-                    // Beta cutoff from a climber move
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-
                     return beta;
                 }
                 alpha = max_score;
@@ -385,12 +378,9 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
     }
 
-    // --- Phase 2: Generate and search quiet moves ---
     auto quiet_moves = search_info.board.generate_quiet_moves();
 
-    // Check for loss (no moves available). This is adjusted to not fire if we found a TT move.
     if (best_move == nullptr && climber_moves.empty() && quiet_moves.empty()) {
-
         return -MATE + ply;
     }
 
@@ -399,9 +389,14 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     for (size_t i = 0; i < quiet_moves.size(); ++i) {
         auto& move = quiet_moves[i];
 
-        // Skip if this is the TT move we already searched
         if (tt_move_opt.has_value() && move == *tt_move_opt) {
             continue;
+        }
+        if (move.winning) {
+            tt.store(search_info.board, move, MATE - ply, depth, 'E');
+            k_moves.add(ply, move);
+            search_info.bestMove = std::make_unique<Moves::Move>(move);
+            return MATE - ply;
         }
 
         search_info.board.make_move(move);
@@ -410,7 +405,6 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
-
             return 0;
         }
 
@@ -419,11 +413,9 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             best_move = std::make_unique<Moves::Move>(move);
             if (max_score > alpha) {
                 if (max_score >= beta) {
-                    // Beta cutoff from a quiet move
                     k_moves.add(ply, move);
                     search_info.bestMove = std::move(best_move);
                     tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-
                     return beta;
                 }
                 alpha = max_score;
@@ -431,14 +423,11 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
     }
 
-    // Store result in Transposition Table
     search_info.bestMove = std::move(best_move);
     if (!(ply == 0 && search_info.quit) && search_info.bestMove) {
         if (alpha != original_alpha) {
-            // Found a better move that raised alpha
             tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'E');
         } else {
-            // Failed to raise alpha, all moves were worse
             tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'A');
         }
     }
