@@ -16,7 +16,7 @@ TEST(TestGeneralRules, MoveDownAnyNumberOfSquares) {
     blocks[0] = 3;
     Board board = create_board(blocks, {0, 2});
 
-    Moves::Move move(0, 5, 6, Constants::God::APOLLO);
+    auto move = Moves::create_move(0, 5, 6, Constants::God::APOLLO);
     EXPECT_TRUE(is_move_in_generated_list(board, move));
 
     board.make_move(move);
@@ -32,7 +32,7 @@ TEST(TestGeneralRules, MoveDownAnyNumberOfSquares) {
 
 TEST(TestGeneralRules, CanBuildWhereYouCameFrom) {
     Board board = create_board(std::nullopt, {0, 2});
-    Moves::Move move(0, 1, 0, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(0, 1, 0, Constants::God::APOLLO);
 
     EXPECT_TRUE(is_move_in_generated_list(board, move));
     board.make_move(move);
@@ -44,7 +44,7 @@ TEST(TestGeneralRules, CanBuildWhereYouCameFrom) {
 
 TEST(TestGeneralRules, CantWarpAroundTheBoard) {
     Board board = create_board();
-    Moves::Move move(0, 24, 1, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(0, 24, 1, Constants::God::APOLLO);
     EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 
@@ -52,14 +52,14 @@ TEST(TestGeneralRules, CantBuildOnNonAdjacentSquare) {
     Board board = create_board();
     // Move from 1->2, attempt to build on 5.
     // 5 is adjacent to 1, but not to 2.
-    Moves::Move move(1, 2, 5, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(1, 2, 5, Constants::God::APOLLO);
     EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 
 TEST(TestGeneralRules, NoBuildOnWorker) {
     Board board = create_board(); // Gray workers at 0, 10
     // Move from 0 -> 5, attempt to build on 10 (occupied by other gray worker)
-    Moves::Move move(0, 5, 10, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(0, 5, 10, Constants::God::APOLLO);
     EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 

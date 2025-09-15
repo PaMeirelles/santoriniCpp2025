@@ -25,7 +25,7 @@ TEST(AthenaTests, athena_power_works) {
                                Constants::God::ATHENA, Constants::God::APOLLO);
 
     // Gray moves from 0 (height=0) to 1 (height=1) => that's an "up" move
-    Moves::Move move_athena(0, 1, 5, Constants::God::ATHENA); // From 0, to 1, build at 5
+    Moves::Move move_athena = Moves::create_move(0, 1, 5, Constants::God::ATHENA); // From 0, to 1, build at 5
     EXPECT_TRUE(is_move_in_generated_list(board, move_athena)) << "Athena move should be valid";
     board.make_move(move_athena);
 
@@ -40,7 +40,7 @@ TEST(AthenaTests, athena_power_works) {
     board._blocks[8] = 1; // Adjacent square 8, height 1 (an upward move)
 
     // Blue tries from 3->8 (adjacent), that's an up move => should fail due to Athena's effect
-    Moves::Move move_apollo(3, 8, 2, Constants::God::APOLLO); // From 3, to 8, build at 2
+    Moves::Move move_apollo = Moves::create_move(3, 8, 2, Constants::God::APOLLO); // From 3, to 8, build at 2
     EXPECT_FALSE(is_move_in_generated_list(board, move_apollo)) << "Apollo's upward move should be invalid due to Athena's power";
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,7 +66,7 @@ TEST(AthenaTests, opponent_generated_moves_do_not_climb_after_athena_up) {
 
     // Adjust blocks so that an up move is available for Gray as Athena.
     // For example, move Gray's worker from square 0 (at level 0) to square 1.
-    Moves::Move move_athena(0, 1, 5, Constants::God::ATHENA); // Move 0->1, build 5
+    Moves::Move move_athena = Moves::create_move(0, 1, 5, Constants::God::ATHENA); // Move 0->1, build 5
     EXPECT_TRUE(is_move_in_generated_list(board, move_athena)) << "Athena move should be valid";
     board.make_move(move_athena);
 
@@ -77,8 +77,8 @@ TEST(AthenaTests, opponent_generated_moves_do_not_climb_after_athena_up) {
     // Check that all generated moves for Blue do not involve moving up
     bool all_moves_are_not_upward = std::all_of(blue_moves.begin(), blue_moves.end(),
         [&](const Moves::Move& move) {
-           sq_i origin = move.from_sq;
-           sq_i final_pos = move.to_sq;
+           sq_i origin = Moves::get_from_sq(move.move);
+           sq_i final_pos = Moves::get_to_sq(move.move);
             // In C++, we need to access _blocks directly for the board state.
             return board._blocks[final_pos] <= board._blocks[origin];
         }
@@ -109,7 +109,7 @@ TEST(AthenaTests, athena_opponent_no_move_loses) {
 
     // Athena (Blue) moves up from 3 (height 0) to 2 (height 1), building on 8.
     // After this move, it becomes Gray's turn, and Athena's effect should apply.
-    Moves::Move move_athena(3, 2, 8, Constants::God::ATHENA);
+    Moves::Move move_athena = Moves::create_move(3, 2, 8, Constants::God::ATHENA);
     EXPECT_TRUE(is_move_in_generated_list(board, move_athena)) << "Athena's initial move should be valid";
     board.make_move(move_athena);
 

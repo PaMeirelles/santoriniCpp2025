@@ -165,7 +165,7 @@ namespace Santorini {
 
     _last_move_height_diff = 0;
 
-    _won = (_blocks[move.from_sq] < 3 && _blocks[move.to_sq] == 3);
+    _won = (_blocks[Moves::get_from_sq(move.move)] < 3 && _blocks[Moves::get_to_sq(move.move)] == 3);
 
     _execute_god_move(move);
 
@@ -190,7 +190,7 @@ namespace Santorini {
     _xor_hash(Constants::ZOBRIST_TURN);
 
     if (Constants::DEBUG) {
-      if (!_sanity_check_workers() || _workers_map[move.to_sq] == -1) {
+      if (!_sanity_check_workers() || _workers_map[Moves::get_to_sq(move.move)] == -1) {
         std::cout << to_text() << std::endl;
         std::abort();
       }
@@ -209,11 +209,11 @@ namespace Santorini {
     _turn *= -1;
     _xor_hash(Constants::ZOBRIST_TURN);
 
-    if (_prevent_up_next_turn != move.had_athena_flag) {
+    if (_prevent_up_next_turn != Moves::had_athena_flag(move.move)) {
       _xor_hash(Constants::ATHENA_EFFECT);
     }
 
-    _prevent_up_next_turn = move.had_athena_flag;
+    _prevent_up_next_turn = Moves::had_athena_flag(move.move);
     _won = false;
 
     _undo_god_move(move);
@@ -256,7 +256,8 @@ namespace Santorini {
     auto moves = _generate_god_moves();
 
     for (auto & move: moves) {
-      move.had_athena_flag = _prevent_up_next_turn;
+      Moves::set_had_athena_flag(move.move, _prevent_up_next_turn);
+      Moves::set_prev_height(move.move, _blocks[Moves::get_build_sq(move.move)]);
     }
     return moves;
   }
@@ -265,7 +266,8 @@ namespace Santorini {
     auto moves = _generate_climber_god_moves();
 
     for (auto & move: moves) {
-      move.had_athena_flag = _prevent_up_next_turn;
+      Moves::set_had_athena_flag(move.move, _prevent_up_next_turn);
+      Moves::set_prev_height(move.move, _blocks[Moves::get_build_sq(move.move)]);
     }
     return moves;
   }
@@ -274,7 +276,8 @@ namespace Santorini {
     auto moves = _generate_quiet_god_moves();
 
     for (auto & move: moves) {
-      move.had_athena_flag = _prevent_up_next_turn;
+      Moves::set_had_athena_flag(move.move, _prevent_up_next_turn);
+      Moves::set_prev_height(move.move, _blocks[Moves::get_build_sq(move.move)]);
     }
     return moves;
   }
@@ -452,7 +455,6 @@ namespace Santorini {
   }
 
   void Board::_restore_block_height(sq_i s, int8_t original_height) {
-
     int8_t current_h = _blocks[s];
 
     if (current_h > 0) _xor_hash(Constants::ZOBRIST_BLOCKS[s][current_h - 1]);
@@ -608,74 +610,74 @@ void Board::_execute_god_move(const Moves::Move& move) {
   // This ensures her power only lasts for one round of opponent moves.
   _prevent_up_next_turn = false;
 
-  switch (move.god) {
+  switch (Moves::get_god(move.move)) {
     case Constants::God::APOLLO: {
-      auto opponent_idx_opt = _which_worker_is_here(move.to_sq);
+      auto opponent_idx_opt = _which_worker_is_here(Moves::get_to_sq(move.move));
 
       if (opponent_idx_opt.has_value()) {
-        _swap_workers(move.from_sq, move.to_sq);
+        _swap_workers(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
       } else {
-        _move_worker(move.from_sq, move.to_sq);
+        _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
       }
 
-      _inc_block(move.build_sq);
+      _inc_block(Moves::get_build_sq(move.move));
       break;
     }
 
     case Constants::God::MINOTAUR: {
-      auto occupant_idx = _which_worker_is_here(move.to_sq);
+      auto occupant_idx = _which_worker_is_here(Moves::get_to_sq(move.move));
       if (occupant_idx) {
-        int dx = (move.to_sq % 5) - (move.from_sq % 5);
-        int dy = (move.to_sq / 5) - (move.from_sq / 5);
+        int dx = (Moves::get_to_sq(move.move) % 5) - (Moves::get_from_sq(move.move) % 5);
+        int dy = (Moves::get_to_sq(move.move) / 5) - (Moves::get_from_sq(move.move) / 5);
 
-        sq_i push_sq = (move.to_sq / 5 + dy) * 5 + ((move.to_sq % 5) + dx);
+        sq_i push_sq = (Moves::get_to_sq(move.move) / 5 + dy) * 5 + ((Moves::get_to_sq(move.move) % 5) + dx);
         _move_worker_back(*occupant_idx, push_sq);
       }
 
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
+      _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
+      _inc_block(Moves::get_build_sq(move.move));
       break;
     }
 
     case Constants::God::PROMETHEUS: {
       // Perform the optional pre-move build if it exists.
-      if (move.extra_build_sq.has_value()) {
-        _inc_block(*move.extra_build_sq);
+      if (Moves::get_extra_build_sq(move.move).has_value()) {
+        _inc_block(*Moves::get_extra_build_sq(move.move));
       }
-      if (_blocks[move.build_sq]>=4) {
-        std::cout << "here " << move.build_sq << "\n";
+      if (_blocks[Moves::get_build_sq(move.move)]>=4) {
+        std::cout << "here " << Moves::get_build_sq(move.move) << "\n";
       }
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
+      _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
+      _inc_block(Moves::get_build_sq(move.move));
       break;
     }
 
     case Constants::God::DEMETER:
     case Constants::God::HEPHAESTUS: {
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
+      _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
+      _inc_block(Moves::get_build_sq(move.move));
       // Perform the second build if it exists.
-      if (move.extra_build_sq.has_value()) {
-        _inc_block(*move.extra_build_sq);
+      if (Moves::get_extra_build_sq(move.move).has_value()) {
+        _inc_block(*Moves::get_extra_build_sq(move.move));
       }
       break;
     }
     // Atlas can build a dome at any level.
     case Constants::God::ATLAS: {
-      _move_worker(move.from_sq, move.to_sq);
-      if (move.dome) {
-        _restore_block_height(move.build_sq, 4);
+      _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
+      if (Moves::is_dome(move.move)) {
+        _restore_block_height(Moves::get_build_sq(move.move), 4);
       } else {
-        _inc_block(move.build_sq);
+        _inc_block(Moves::get_build_sq(move.move));
       }
       break;
     }
 
     // Athena sets a flag if she moves up.
     case Constants::God::ATHENA: {
-      _last_move_height_diff = _blocks[move.to_sq] - _blocks[move.from_sq];
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
+      _last_move_height_diff = _blocks[Moves::get_to_sq(move.move)] - _blocks[Moves::get_from_sq(move.move)];
+      _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
+      _inc_block(Moves::get_build_sq(move.move));
       break;
     }
 
@@ -686,9 +688,9 @@ void Board::_execute_god_move(const Moves::Move& move) {
     case Constants::God::HERMES:
     case Constants::God::PAN: {
       default:
-        _last_move_height_diff = _blocks[move.to_sq] - _blocks[move.from_sq];
-        _move_worker(move.from_sq, move.to_sq);
-        _inc_block(move.build_sq);
+        _last_move_height_diff = _blocks[Moves::get_to_sq(move.move)] - _blocks[Moves::get_from_sq(move.move)];
+        _move_worker(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
+        _inc_block(Moves::get_build_sq(move.move));
       break;
     }
   }
@@ -696,34 +698,34 @@ void Board::_execute_god_move(const Moves::Move& move) {
 void Board::_undo_god_move(const Moves::Move& move) {
   // Restore the Athena flag to its state *before* the move was made.
   // This value should be stored in the Move object.
-  _prevent_up_next_turn = move.had_athena_flag;
+  _prevent_up_next_turn = Moves::had_athena_flag(move.move);
 
-  switch (move.god) {
+  switch (Moves::get_god(move.move)) {
     case Constants::God::APOLLO: {
-      _dec_block(move.build_sq);
+      _dec_block(Moves::get_build_sq(move.move));
 
-      auto opponent_idx_opt = _which_worker_is_here(move.from_sq);
+      auto opponent_idx_opt = _which_worker_is_here(Moves::get_from_sq(move.move));
 
       if (opponent_idx_opt.has_value() && _is_opponent_worker(*opponent_idx_opt)) {
-        _swap_workers(move.from_sq, move.to_sq);
+        _swap_workers(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
       } else {
-        int my_worker_idx = *_which_worker_is_here(move.to_sq);
-        _move_worker_back(my_worker_idx, move.from_sq);
+        int my_worker_idx = *_which_worker_is_here(Moves::get_to_sq(move.move));
+        _move_worker_back(my_worker_idx, Moves::get_from_sq(move.move));
       }
       break;
     }
 
     case Constants::God::MINOTAUR: {
-      _dec_block(move.build_sq);
-      int my_worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(my_worker_idx, move.from_sq);
+      _dec_block(Moves::get_build_sq(move.move));
+      int my_worker_idx = *_which_worker_is_here(Moves::get_to_sq(move.move));
+      _move_worker_back(my_worker_idx, Moves::get_from_sq(move.move));
 
-      if (move.minotaur_pushed) {
-        int dx = (move.to_sq % 5) - (move.from_sq % 5);
-        int dy = (move.to_sq / 5) - (move.from_sq / 5);
-        sq_i push_sq = ((move.to_sq / 5) + dy) * 5 + ((move.to_sq % 5) + dx);
+      if (Moves::was_minotaur_pushed(move.move)) {
+        int dx = (Moves::get_to_sq(move.move) % 5) - (Moves::get_from_sq(move.move) % 5);
+        int dy = (Moves::get_to_sq(move.move) / 5) - (Moves::get_from_sq(move.move) / 5);
+        sq_i push_sq = ((Moves::get_to_sq(move.move) / 5) + dy) * 5 + ((Moves::get_to_sq(move.move) % 5) + dx);
         int opp_idx = *_which_worker_is_here(push_sq);
-        _move_worker_back(opp_idx, move.to_sq);
+        _move_worker_back(opp_idx, Moves::get_to_sq(move.move));
       }
       break;
     }
@@ -731,24 +733,24 @@ void Board::_undo_god_move(const Moves::Move& move) {
     case Constants::God::DEMETER:
     case Constants::God::HEPHAESTUS:
     case Constants::God::PROMETHEUS: {
-      _dec_block(move.build_sq);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
-      if (move.extra_build_sq) _dec_block(*move.extra_build_sq);
+      _dec_block(Moves::get_build_sq(move.move));
+      int worker_idx = *_which_worker_is_here(Moves::get_to_sq(move.move));
+      _move_worker_back(worker_idx, Moves::get_from_sq(move.move));
+      if (Moves::get_extra_build_sq(move.move)) _dec_block(*Moves::get_extra_build_sq(move.move));
       break;
     }
 
     case Constants::God::ATLAS: {
-      _restore_block_height(move.build_sq, *move.atlas_original_height);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
+      _restore_block_height(Moves::get_build_sq(move.move), *Moves::get_prev_height(move.move));
+      int worker_idx = *_which_worker_is_here(Moves::get_to_sq(move.move));
+      _move_worker_back(worker_idx, Moves::get_from_sq(move.move));
       break;
     }
 
     case Constants::God::ATHENA: {
-      _dec_block(move.build_sq);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
+      _dec_block(Moves::get_build_sq(move.move));
+      int worker_idx = *_which_worker_is_here(Moves::get_to_sq(move.move));
+      _move_worker_back(worker_idx, Moves::get_from_sq(move.move));
       _last_move_height_diff = 0;
       break;
     }
@@ -757,9 +759,9 @@ void Board::_undo_god_move(const Moves::Move& move) {
     case Constants::God::HERMES:
     case Constants::God::PAN:
     default: {
-      _dec_block(move.build_sq);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
+      _dec_block(Moves::get_build_sq(move.move));
+      int worker_idx = *_which_worker_is_here(Moves::get_to_sq(move.move));
+      _move_worker_back(worker_idx, Moves::get_from_sq(move.move));
       _last_move_height_diff = 0;
       break;
     }
@@ -880,7 +882,7 @@ std::vector<Moves::Move>Board::_generate_god_moves() const {
           if (build_sq == from_sq) {
             if (occupant || _blocks[build_sq] == 4) continue;
           } else if (!is_free(build_sq)) continue;
-            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::APOLLO);
+            moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::APOLLO));
         }
       }
     }
@@ -901,7 +903,7 @@ std::vector<Moves::Move>Board::_generate_god_moves() const {
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ARTEMIS);
+            moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ARTEMIS));
           }
         }
 
@@ -911,7 +913,7 @@ std::vector<Moves::Move>Board::_generate_god_moves() const {
 
           for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
             if (_build_ok(from_sq, second_sq, build_sq)) {
-              moves.emplace_back(from_sq, second_sq, build_sq, Constants::God::ARTEMIS);
+              moves.emplace_back(Moves::create_move(from_sq, second_sq, build_sq, Constants::God::ARTEMIS));
             }
           }
         }
@@ -934,8 +936,7 @@ std::vector<Moves::Move> Board::_generate_athena_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ATHENA);
-        }
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATHENA));        }
       }
     }
   }
@@ -957,14 +958,12 @@ std::vector<Moves::Move> Board::_generate_atlas_moves() const {
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
           // Normal build
-          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          move.atlas_original_height = _blocks[build_sq];
+          auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
           moves.emplace_back(move);
           // Dome build
           if (_blocks[build_sq] < 4) {
-            auto dome_move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-            dome_move.dome = true;
-            dome_move.atlas_original_height = _blocks[build_sq];
+            auto dome_move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
+            Moves::set_dome(dome_move.move, true);
             moves.emplace_back(dome_move);
           }
         }
@@ -994,11 +993,11 @@ std::vector<Moves::Move> Board::_generate_demeter_moves() const {
       }
 
       for (size_t j = 0; j < build_sqs.size(); ++j) {
-        moves.emplace_back(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+        moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER));
 
         for (size_t k = j + 1; k < build_sqs.size(); ++k) {
-          auto move = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-          move.extra_build_sq = build_sqs[k];
+          auto move = Moves::create_move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+          Moves::set_extra_build_sq(move.move, build_sqs[k]);
           moves.emplace_back(move);
         }
       }
@@ -1021,10 +1020,10 @@ std::vector<Moves::Move> Board::_generate_hephaestus_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS));
           if (_blocks[build_sq] < 2) {
-            auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-            move.extra_build_sq = build_sq;
+            auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+            Moves::set_extra_build_sq(move.move, build_sq);
             moves.emplace_back(move);
           }
         }
@@ -1050,7 +1049,7 @@ std::vector<Moves::Move> Board::_generate_hephaestus_moves() const {
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
+            moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HERMES));
           }
         }
       }
@@ -1058,7 +1057,7 @@ std::vector<Moves::Move> Board::_generate_hephaestus_moves() const {
       // Build without moving
       for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
         if (_build_ok(from_sq, from_sq, build_sq)) {
-          moves.emplace_back(from_sq, from_sq, build_sq, Constants::God::HERMES);
+          moves.emplace_back(Moves::create_move(from_sq, from_sq, build_sq, Constants::God::HERMES));
         }
       }
 
@@ -1079,7 +1078,7 @@ std::vector<Moves::Move> Board::_generate_hephaestus_moves() const {
 
           for (sq_i build_sq : Constants::NEIGHBOURS[next_sq]) {
             if (_build_ok(from_sq, next_sq, build_sq)) {
-              moves.emplace_back(from_sq, next_sq, build_sq, Constants::God::HERMES);
+              moves.emplace_back(Moves::create_move(from_sq, next_sq, build_sq, Constants::God::HERMES));
             }
           }
           q.push_back(next_sq);
@@ -1117,8 +1116,8 @@ std::vector<Moves::Move> Board::_generate_minotaur_moves() const {
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (push_sq && *push_sq == build_sq) continue;
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
-          move.minotaur_pushed = push_sq.has_value();
+          auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
+          Moves::set_minotaur_push(move.move, push_sq.has_value());
           moves.emplace_back(move);
         }
       }
@@ -1141,7 +1140,7 @@ std::vector<Moves::Move> Board::_generate_pan_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PAN);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PAN));
         }
       }
     }
@@ -1164,7 +1163,7 @@ std::vector<Moves::Move> Board::_generate_prometheus_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS));
         }
       }
     }
@@ -1181,9 +1180,9 @@ std::vector<Moves::Move> Board::_generate_prometheus_moves() const {
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
-            move.extra_build_sq = opt_build_sq;
-            if (move.build_sq == move.extra_build_sq && _blocks[move.build_sq] == 3) continue;
+            auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
+            Moves::set_extra_build_sq(move.move, opt_build_sq);
+            if (Moves::get_build_sq(move.move) == Moves::get_extra_build_sq(move.move) && _blocks[Moves::get_build_sq(move.move)] == 3) continue;
             moves.emplace_back(move);
           }
         }
@@ -1214,7 +1213,7 @@ std::vector<Moves::Move> Board::_generate_climber_apollo_moves() const {
         if (build_sq == from_sq) {
           if (occupant || _blocks[build_sq] == 4) continue;
         } else if (!is_free(build_sq)) continue;
-        moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::APOLLO);
+        moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::APOLLO));
       }
     }
   }
@@ -1240,7 +1239,7 @@ std::vector<Moves::Move> Board::_generate_quiet_apollo_moves() const {
         if (build_sq == from_sq) {
           if (occupant || _blocks[build_sq] == 4) continue;
         } else if (!is_free(build_sq)) continue;
-        moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::APOLLO);
+        moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::APOLLO));
       }
     }
   }
@@ -1264,7 +1263,7 @@ std::vector<Moves::Move> Board::_generate_climber_artemis_moves() const {
 
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ARTEMIS);
+            moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ARTEMIS));
           }
         }
       }
@@ -1276,7 +1275,7 @@ std::vector<Moves::Move> Board::_generate_climber_artemis_moves() const {
         if (_blocks[second_sq] > _blocks[from_sq]) {
             for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
                 if (_build_ok(from_sq, second_sq, build_sq)) {
-                    moves.emplace_back(from_sq, second_sq, build_sq, Constants::God::ARTEMIS);
+                    moves.emplace_back(Moves::create_move(from_sq, second_sq, build_sq, Constants::God::ARTEMIS));
                 }
             }
         }
@@ -1301,7 +1300,7 @@ std::vector<Moves::Move> Board::_generate_quiet_artemis_moves() const {
       if (_blocks[to_sq] <= _blocks[from_sq]) {
         for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
           if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ARTEMIS);
+            moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ARTEMIS));
           }
         }
       }
@@ -1313,7 +1312,7 @@ std::vector<Moves::Move> Board::_generate_quiet_artemis_moves() const {
         if (_blocks[second_sq] <= _blocks[from_sq]) {
             for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
                 if (_build_ok(from_sq, second_sq, build_sq)) {
-                    moves.emplace_back(from_sq, second_sq, build_sq, Constants::God::ARTEMIS);
+                    moves.emplace_back(Moves::create_move(from_sq, second_sq, build_sq, Constants::God::ARTEMIS));
                 }
             }
         }
@@ -1337,7 +1336,7 @@ std::vector<Moves::Move> Board::_generate_climber_athena_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ATHENA);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATHENA));
         }
       }
     }
@@ -1358,7 +1357,7 @@ std::vector<Moves::Move> Board::_generate_quiet_athena_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ATHENA);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATHENA));
         }
       }
     }
@@ -1381,13 +1380,11 @@ std::vector<Moves::Move> Board::_generate_climber_atlas_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          move.atlas_original_height = _blocks[build_sq];
+          auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
           moves.emplace_back(move);
           if (_blocks[build_sq] < 4) {
-            auto dome_move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-            dome_move.dome = true;
-            dome_move.atlas_original_height = _blocks[build_sq];
+            auto dome_move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
+            Moves::set_dome(dome_move.move, true);
             moves.emplace_back(dome_move);
           }
         }
@@ -1411,13 +1408,11 @@ std::vector<Moves::Move> Board::_generate_quiet_atlas_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          move.atlas_original_height = _blocks[build_sq];
+          auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
           moves.emplace_back(move);
           if (_blocks[build_sq] < 4) {
-            auto dome_move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-            dome_move.dome = true;
-            dome_move.atlas_original_height = _blocks[build_sq];
+            auto dome_move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
+            Moves::set_dome(dome_move.move, true);
             moves.emplace_back(dome_move);
           }
         }
@@ -1447,10 +1442,10 @@ std::vector<Moves::Move> Board::_generate_climber_demeter_moves() const {
                 }
             }
             for (size_t j = 0; j < build_sqs.size(); ++j) {
-                moves.emplace_back(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+                moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER));
                 for (size_t k = j + 1; k < build_sqs.size(); ++k) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-                    move.extra_build_sq = build_sqs[k];
+                    auto move = Moves::create_move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+                    Moves::set_extra_build_sq(move.move, build_sqs[k]);
                     moves.emplace_back(move);
                 }
             }
@@ -1479,11 +1474,11 @@ std::vector<Moves::Move> Board::_generate_quiet_demeter_moves() const {
             }
 
             for (size_t j = 0; j < build_sqs.size(); ++j) {
-                moves.emplace_back(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+                moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER));
 
                 for (size_t k = j + 1; k < build_sqs.size(); ++k) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-                    move.extra_build_sq = build_sqs[k];
+                    auto move = Moves::create_move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
+                    Moves::set_extra_build_sq(move.move, build_sqs[k]);
                     moves.emplace_back(move);
                 }
             }
@@ -1507,10 +1502,10 @@ std::vector<Moves::Move> Board::_generate_climber_hephaestus_moves() const {
 
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+                    moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS));
                     if (_blocks[build_sq] < 2) {
-                        auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-                        move.extra_build_sq = build_sq;
+                        auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+                        Moves::set_extra_build_sq(move.move, build_sq);
                         moves.emplace_back(move);
                     }
                 }
@@ -1534,10 +1529,10 @@ std::vector<Moves::Move> Board::_generate_quiet_hephaestus_moves() const {
 
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+                    moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS));
                     if (_blocks[build_sq] < 2) {
-                        auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-                        move.extra_build_sq = build_sq;
+                        auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
+                        Moves::set_extra_build_sq(move.move, build_sq);
                         moves.emplace_back(move);
                     }
                 }
@@ -1562,7 +1557,7 @@ std::vector<Moves::Move> Board::_generate_climber_hermes_moves() const {
 
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
+                    moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HERMES));
                 }
             }
         }
@@ -1584,7 +1579,7 @@ std::vector<Moves::Move> Board::_generate_quiet_hermes_moves() const {
             if (_blocked_by_athena(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
+                    moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::HERMES));
                 }
             }
         }
@@ -1592,7 +1587,7 @@ std::vector<Moves::Move> Board::_generate_quiet_hermes_moves() const {
         // Build without moving (inherently quiet)
         for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
             if (_build_ok(from_sq, from_sq, build_sq)) {
-                moves.emplace_back(from_sq, from_sq, build_sq, Constants::God::HERMES);
+                moves.emplace_back(Moves::create_move(from_sq, from_sq, build_sq, Constants::God::HERMES));
             }
         }
 
@@ -1609,7 +1604,7 @@ std::vector<Moves::Move> Board::_generate_quiet_hermes_moves() const {
                 visited[next_sq] = true;
                 for (sq_i build_sq : Constants::NEIGHBOURS[next_sq]) {
                     if (_build_ok(from_sq, next_sq, build_sq)) {
-                        moves.emplace_back(from_sq, next_sq, build_sq, Constants::God::HERMES);
+                        moves.emplace_back(Moves::create_move(from_sq, next_sq, build_sq, Constants::God::HERMES));
                     }
                 }
                 q.push_back(next_sq);
@@ -1646,8 +1641,8 @@ std::vector<Moves::Move> Board::_generate_climber_minotaur_moves() const {
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (push_sq && *push_sq == build_sq) continue;
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
-                    move.minotaur_pushed = push_sq.has_value();
+                    auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
+                    Moves::set_minotaur_push(move.move, push_sq.has_value());
                     moves.emplace_back(move);
                 }
             }
@@ -1682,8 +1677,8 @@ std::vector<Moves::Move> Board::_generate_quiet_minotaur_moves() const {
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (push_sq && *push_sq == build_sq) continue;
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
-                    move.minotaur_pushed = push_sq.has_value();
+                    auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
+                    Moves::set_minotaur_push(move.move, push_sq.has_value());
                     moves.emplace_back(move);
                 }
             }
@@ -1710,7 +1705,7 @@ std::vector<Moves::Move> Board::_generate_climber_pan_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PAN);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PAN));
         }
       }
     }
@@ -1735,7 +1730,7 @@ std::vector<Moves::Move> Board::_generate_quiet_pan_moves() const {
 
       for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
         if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PAN);
+          moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PAN));
         }
       }
     }
@@ -1758,7 +1753,7 @@ std::vector<Moves::Move> Board::_generate_climber_prometheus_moves() const {
 
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
+                    moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS));
                 }
             }
         }
@@ -1778,7 +1773,7 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
             if (_blocked_by_athena(from_sq, to_sq)) continue;
             for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                 if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
+                    moves.emplace_back(Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS));
                 }
             }
         }
@@ -1792,9 +1787,9 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
                 if (!_adj_ok(from_sq, to_sq)) continue;
                 for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                     if (_build_ok(from_sq, to_sq, build_sq)) {
-                        auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
-                        move.extra_build_sq = opt_build_sq;
-                        if (move.build_sq == move.extra_build_sq && _blocks[move.build_sq] == 3) continue;
+                        auto move = Moves::create_move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
+                        Moves::set_extra_build_sq(move.move, opt_build_sq);
+                        if (Moves::get_build_sq(move.move) == Moves::get_extra_build_sq(move.move) && _blocks[Moves::get_build_sq(move.move)] == 3) continue;
                         moves.emplace_back(move);
                     }
                 }
@@ -1808,56 +1803,56 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
     // --- Phase 1: Basic universal checks ---
 
     // The worker at from_sq must belong to the current player.
-    auto worker_idx_opt = _which_worker_is_here(move.from_sq);
+    auto worker_idx_opt = _which_worker_is_here(Moves::get_from_sq(move.move));
     if (!worker_idx_opt.has_value() || _is_opponent_worker(*worker_idx_opt)) {
         return false;
     }
 
     // The god associated with the move must match the current player's god.
     int current_player_idx = (_turn == 1) ? 0 : 1;
-    if (_gods[current_player_idx] != move.god) {
+    if (_gods[current_player_idx] != Moves::get_god(move.move)) {
         return false;
     }
 
     // Athena's effect: If active, the current player cannot move up.
-    if (_blocked_by_athena(move.from_sq, move.to_sq)) {
+    if (_blocked_by_athena(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move))) {
         return false;
     }
 
     // --- Phase 2: God-specific validation ---
 
-    switch (move.god) {
+    switch (Moves::get_god(move.move)) {
         case Constants::God::ATHENA:
         case Constants::God::PAN: {
-            return _complete_checks(move.from_sq, move.to_sq, move.build_sq);
+            return _complete_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         case Constants::God::APOLLO: {
-            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !_adj_ok(move.from_sq, move.to_sq))
+            if (_blocks[Moves::get_to_sq(move.move)] - _blocks[Moves::get_from_sq(move.move)] > 1 || !_adj_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move)))
                 return false;
 
-            auto occupant = _which_worker_is_here(move.to_sq);
-            if (_blocks[move.to_sq] == 4 || (occupant && _is_ally_worker(*occupant)))
+            auto occupant = _which_worker_is_here(Moves::get_to_sq(move.move));
+            if (_blocks[Moves::get_to_sq(move.move)] == 4 || (occupant && _is_ally_worker(*occupant)))
                 return false;
 
             // Build square cannot be where the opponent will be moved to.
-            if (occupant && move.build_sq == move.from_sq)
+            if (occupant && Moves::get_build_sq(move.move) == Moves::get_from_sq(move.move))
                 return false;
 
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            return _build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         case Constants::God::ARTEMIS: {
             // Artemis can move one or two spaces. The move object only stores the final destination.
             // We must check if a valid path of 1 or 2 steps exists.
-            bool one_step_valid = _move_checks(move.from_sq, move.to_sq);
+            bool one_step_valid = _move_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
 
             bool two_step_valid = false;
             if (!one_step_valid) {
-                 for (sq_i mid_sq : Constants::NEIGHBOURS[move.from_sq]) {
-                    if (_move_checks(move.from_sq, mid_sq)) {
-                        if (_adj_ok(mid_sq, move.to_sq) && move.to_sq != move.from_sq && is_free(move.to_sq)) {
-                           if (!_blocked_by_athena(mid_sq, move.to_sq) && _height_ok(mid_sq, move.to_sq)) {
+                 for (sq_i mid_sq : Constants::NEIGHBOURS[Moves::get_from_sq(move.move)]) {
+                    if (_move_checks(Moves::get_from_sq(move.move), mid_sq)) {
+                        if (_adj_ok(mid_sq, Moves::get_to_sq(move.move)) && Moves::get_to_sq(move.move) != Moves::get_from_sq(move.move) && is_free(Moves::get_to_sq(move.move))) {
+                           if (!_blocked_by_athena(mid_sq, Moves::get_to_sq(move.move)) && _height_ok(mid_sq, Moves::get_to_sq(move.move))) {
                                two_step_valid = true;
                                break;
                            }
@@ -1867,53 +1862,53 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
             }
             if (!one_step_valid && !two_step_valid) return false;
 
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            return _build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         case Constants::God::ATLAS: {
-            if (!_move_checks(move.from_sq, move.to_sq)) return false;
-            if (move.dome && _blocks[move.build_sq] == 4) return false;
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            if (!_move_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move))) return false;
+            if (Moves::is_dome(move.move) && _blocks[Moves::get_build_sq(move.move)] == 4) return false;
+            return _build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         case Constants::God::DEMETER: {
-            if (!_complete_checks(move.from_sq, move.to_sq, move.build_sq)) return false;
-            if (move.extra_build_sq) {
-                if (*move.extra_build_sq == move.build_sq) return false;
-                if (!_build_ok(move.from_sq, move.to_sq, *move.extra_build_sq)) return false;
+            if (!_complete_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move))) return false;
+            if (Moves::get_extra_build_sq(move.move)) {
+                if (*Moves::get_extra_build_sq(move.move) == Moves::get_build_sq(move.move)) return false;
+                if (!_build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), *Moves::get_extra_build_sq(move.move))) return false;
             }
             return true;
         }
 
         case Constants::God::HEPHAESTUS: {
-            if (!_complete_checks(move.from_sq, move.to_sq, move.build_sq)) return false;
-            if (move.extra_build_sq) {
-                if (*move.extra_build_sq != move.build_sq) return false;
+            if (!_complete_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move))) return false;
+            if (Moves::get_extra_build_sq(move.move)) {
+                if (*Moves::get_extra_build_sq(move.move) != Moves::get_build_sq(move.move)) return false;
                 // The second build cannot place a 4th level (dome).
                 // So the height before the first build must be < 2.
-                if (_blocks[move.build_sq] >= 2) return false;
+                if (_blocks[Moves::get_build_sq(move.move)] >= 2) return false;
             }
             return true;
         }
 
         case Constants::God::HERMES: {
             // Case 1: Standard one-step move.
-            bool standard_move_ok = _move_checks(move.from_sq, move.to_sq);
+            bool standard_move_ok = _move_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
 
             // Case 2: Build without moving.
-            bool build_in_place_ok = (move.from_sq == move.to_sq);
+            bool build_in_place_ok = (Moves::get_from_sq(move.move) == Moves::get_to_sq(move.move));
 
             // Case 3: Multi-step move on the same level.
             bool multi_move_ok = false;
             if (!standard_move_ok && !build_in_place_ok) {
-                int8_t h = _blocks[move.from_sq];
+                int8_t h = _blocks[Moves::get_from_sq(move.move)];
                 std::array<bool, 25> visited{};
                 std::deque<sq_i> q;
-                q.push_back(move.from_sq);
-                visited[move.from_sq] = true;
+                q.push_back(Moves::get_from_sq(move.move));
+                visited[Moves::get_from_sq(move.move)] = true;
                 while(!q.empty()) {
                     sq_i curr = q.front(); q.pop_front();
-                    if (curr == move.to_sq) {
+                    if (curr == Moves::get_to_sq(move.move)) {
                         multi_move_ok = true;
                         break;
                     }
@@ -1928,43 +1923,43 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
 
             if (!standard_move_ok && !build_in_place_ok && !multi_move_ok) return false;
 
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            return _build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         case Constants::God::MINOTAUR: {
-            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !_adj_ok(move.from_sq, move.to_sq))
+            if (_blocks[Moves::get_to_sq(move.move)] - _blocks[Moves::get_from_sq(move.move)] > 1 || !_adj_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move)))
                 return false;
 
-            auto occupant = _which_worker_is_here(move.to_sq);
-            if (_blocks[move.to_sq] == 4 || (occupant && _is_ally_worker(*occupant)))
+            auto occupant = _which_worker_is_here(Moves::get_to_sq(move.move));
+            if (_blocks[Moves::get_to_sq(move.move)] == 4 || (occupant && _is_ally_worker(*occupant)))
                 return false;
 
             std::optional<sq_i> push_sq;
             if (occupant) { // Must be an opponent
-                push_sq = _calculate_push_square(move.from_sq, move.to_sq);
+                push_sq = _calculate_push_square(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move));
                 if (!push_sq || !is_free(*push_sq)) return false;
             }
 
-            if (push_sq && *push_sq == move.build_sq) return false;
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            if (push_sq && *push_sq == Moves::get_build_sq(move.move)) return false;
+            return _build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         case Constants::God::PROMETHEUS: {
-            if (move.extra_build_sq) { // Pre-build move
-                if (!_build_ok(move.from_sq, move.from_sq, *move.extra_build_sq)) return false;
+            if (Moves::get_extra_build_sq(move.move)) { // Pre-build move
+                if (!_build_ok(Moves::get_from_sq(move.move), Moves::get_from_sq(move.move), *Moves::get_extra_build_sq(move.move))) return false;
 
                 // Cannot move up after building
-                int temp_h_adj = (move.to_sq == *move.extra_build_sq) ? 1 : 0;
-                if (_blocks[move.to_sq] + temp_h_adj > _blocks[move.from_sq]) return false;
+                int temp_h_adj = (Moves::get_to_sq(move.move) == *Moves::get_extra_build_sq(move.move)) ? 1 : 0;
+                if (_blocks[Moves::get_to_sq(move.move)] + temp_h_adj > _blocks[Moves::get_from_sq(move.move)]) return false;
 
-                if (!_adj_ok(move.from_sq, move.to_sq)) return false;
-                if (move.from_sq != move.to_sq && !is_free(move.to_sq)) return false;
+                if (!_adj_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move))) return false;
+                if (Moves::get_from_sq(move.move) != Moves::get_to_sq(move.move) && !is_free(Moves::get_to_sq(move.move))) return false;
 
             } else { // Standard move
-                if (!_move_checks(move.from_sq, move.to_sq)) return false;
+                if (!_move_checks(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move))) return false;
             }
 
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            return _build_ok(Moves::get_from_sq(move.move), Moves::get_to_sq(move.move), Moves::get_build_sq(move.move));
         }
 
         default:

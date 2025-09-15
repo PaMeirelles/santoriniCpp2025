@@ -21,7 +21,7 @@ TEST(ApolloTests, swap_up_one_height) {
 
     // from 0->1, occupant is Blue. That occupant is on height=1, which is only 1 higher than height=0 => valid
     // build on 2 for example
-    Moves::Move move(0, 1, 6, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(0, 1, 6, Constants::God::APOLLO);
     EXPECT_TRUE(is_move_in_generated_list(board, move));
     board.make_move(move);
     // They swap, so Blue's worker is now on 0, Gray's worker on 1
@@ -37,7 +37,7 @@ TEST(ApolloTests, can_only_swap_with_enemy) {
     */
     // Gray at 0,1; Blue at 23,24. Gray tries to swap with square=1 => occupant is Gray => invalid.
     Board board = create_board(std::nullopt, {0, 1}, {23, 24}, 1, Constants::God::APOLLO, Constants::God::ARTEMIS);
-    Moves::Move move(0, 1, 2, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(0, 1, 2, Constants::God::APOLLO);
     EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 
@@ -59,7 +59,7 @@ TEST(ApolloTests, no_moves_but_apollo_swap_saves_you) {
 
     // If not for Apollo swap, everything else is 4 => no moves. But we do have an Apollo swap with occupant on 1.
     // We'll do from_sq=0 -> to_sq=1, build at square=2 for instance.
-    Moves::Move move(0, 1, 7, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(0, 1, 7, Constants::God::APOLLO);
     EXPECT_TRUE(is_move_in_generated_list(board, move));  // This means we are not forced-losing.
     // We can even apply the move
     board.make_move(move);
@@ -69,7 +69,7 @@ TEST(ApolloTests, no_moves_but_apollo_swap_saves_you) {
 
 TEST(ApolloTests, no_build_on_from_when_swapping) {
     Board board = create_board(std::nullopt, {0, 1}, {2, 3});
-    Moves::Move move(1, 2, 1, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(1, 2, 1, Constants::God::APOLLO);
     EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 
@@ -80,7 +80,7 @@ TEST(ApolloTests, no_swap_can_build) {
         0, 0, 0, 0, 0
     };
     Board board = create_board(blocks, {7, 15}, {0, 2}, 1, Constants::God::APOLLO, Constants::God::ARTEMIS);
-    Moves::Move move(7, 3, 7, Constants::God::APOLLO);
+    Moves::Move move = Moves::create_move(7, 3, 7, Constants::God::APOLLO);
     EXPECT_TRUE(is_move_in_generated_list(board, move));
 }
 

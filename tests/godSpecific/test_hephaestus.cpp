@@ -17,8 +17,7 @@ TEST(HephaestusTests, cannot_build_twice_on_different_squares) {
     Board board = create_board(std::nullopt, {0, 10}, {23, 24}, 1, Constants::God::HEPHAESTUS, Constants::God::ARTEMIS);
 
     // Attempt from 0->1, build1=2, build2=3 => invalid because build_sq_1 != build_sq_2
-    Moves::Move move(0, 1, 2, Constants::God::HEPHAESTUS);
-    move.extra_build_sq = 3;
+    Moves::Move move = Moves::create_move(0, 1, 2, Constants::God::HEPHAESTUS, false, false, 3);
     EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Hephaestus should not be able to build twice on different squares";
 }
 
@@ -31,7 +30,7 @@ TEST(HephaestusTests, can_build_only_once_if_desired) {
     Board board = create_board(std::nullopt, {0, 10}, {23, 24}, 1, Constants::God::HEPHAESTUS, Constants::God::ARTEMIS);
 
     // From 0->1, build at 2 only once. No second build square.
-    Moves::Move move(0, 1, 2, Constants::God::HEPHAESTUS); // Only build_sq_1 is provided
+    Moves::Move move = Moves::create_move(0, 1, 2, Constants::God::HEPHAESTUS); // Only build_sq_1 is provided
     EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Hephaestus should be able to build only once if desired";
 }
 
@@ -53,8 +52,7 @@ TEST(HephaestusTests, cannot_dome_on_second_build) {
     // Initial blocks[2] = 2.
     // First build: blocks[2] becomes 3.
     // Second build: blocks[2] becomes 4 (dome). This should be invalid for Hephaestus's second build.
-    Moves::Move move(0, 1, 2, Constants::God::HEPHAESTUS);
-    move.extra_build_sq = 2;
+    Moves::Move move = Moves::create_move(0, 1, 2, Constants::God::HEPHAESTUS, false, false, 2);
     EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Hephaestus should not be able to dome on the second build";
 }
 
@@ -73,7 +71,7 @@ TEST(HephaestusTests, can_dome_normally) {
 
     // Single build from 0->1, build at 2.
     // blocks[2] goes from 3 to 4 (dome). This is a single build and should be valid.
-    Moves::Move move(0, 1, 2, Constants::God::HEPHAESTUS);
+    Moves::Move move = Moves::create_move(0, 1, 2, Constants::God::HEPHAESTUS);
     EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Hephaestus should be able to dome with a single build";
 }
 
@@ -86,6 +84,19 @@ TEST(HephaestusTests, misc) {
     Board board("0N3N3N0G2G2N3N4N4N4N2N3N3N1B3N0N1N3N0B1N0N0N1N0N1N0580");
     int state = board.check_state();
     EXPECT_EQ(state, -1) << "Board state should be -1 for this specific scenario (loss for current player)";
+}
+
+TEST(HephaestusTests, can_build_twice) {
+    Board board = create_board(std::nullopt, {0, 10}, {23, 24}, 1, Constants::God::HEPHAESTUS, Constants::God::ARTEMIS);
+
+    // From 0->1, build at 2 only once. No second build square.
+    // DemeterMove constructor:sqfrom,sqto,sqb1, optional<sq> b2 = nullopt
+    Moves::Move move = Moves::create_move(0, 1, 2, Constants::God::HEPHAESTUS, false, false, 2);
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Hephaestus should be able to build twice if desired";
+
+    board.make_move(move);
+    // Accessing _blocks directly for testing purposes due to friendship
+    EXPECT_EQ(board.get_blocks()[2], 2) << "Square 2 should have a height of 2 after move";
 }
 
 } // namespace Santorini

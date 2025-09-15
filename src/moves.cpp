@@ -60,77 +60,78 @@ namespace Santorini::Moves {
     }
 
     // --- Move::to_text Implementation ---
-    std::string Move::to_text(const Santorini::Board& board) const {
-        std::string text = square_to_text(from_sq);
 
-        switch (god) {
-            case Constants::God::ARTEMIS: {
-                // If not a simple adjacent move, find a plausible intermediate square
-                // that respects board state (occupancy and height).
-                auto blocks = board.get_blocks();
-                if (!is_adjacent(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
-                    for (sq_i mid = 0; mid < 25; ++mid) {
-                        // Check geometry
-                        if (mid == from_sq || mid == to_sq || !is_adjacent(from_sq, mid) || !is_adjacent(to_sq, mid)) {
-                            continue;
-                        }
-                        // Check board state for a valid two-step path
-                        bool is_valid_path = board.is_free(mid) &&
-                                             (blocks[mid] - blocks[from_sq] <= 1) &&
-                                             (blocks[to_sq] - blocks[mid] <= 1);
+  std::string move_to_text(const Board& board, const Move move) {
+    // Extract all move data first for clarity
+    const auto from_sq = get_from_sq(move.move);
+    const auto to_sq = get_to_sq(move.move);
+    const auto build_sq = get_build_sq(move.move);
+    const auto god = get_god(move.move);
+    const auto dome = is_dome(move.move);
+    const auto extra_build_sq = get_extra_build_sq(move.move);
 
-                        if (is_valid_path) {
-                            text += square_to_text(mid);
-                            break; // Found a valid mid-point
-                        }
+    std::string text = square_to_text(from_sq);
+
+    switch (god) {
+        case Constants::God::ARTEMIS: {
+            // Check if it was a double-move by checking adjacency and height difference
+            if (!is_adjacent(from_sq, to_sq)) {
+                // Find a plausible intermediate square for the text representation
+                for (sq_i mid = 0; mid < 25; ++mid) {
+                    if (mid == from_sq || mid == to_sq || !is_adjacent(from_sq, mid) || !is_adjacent(to_sq, mid)) {
+                        continue;
+                    }
+                    // A simple check is usually sufficient for notation, as we assume a legal move
+                    if (board.is_free(mid)) {
+                        text += square_to_text(mid);
+                        break;
                     }
                 }
-                text += square_to_text(to_sq);
-                text += square_to_text(build_sq);
-                break;
             }
-
-            case Constants::God::HERMES: {
-                auto blocks = board.get_blocks();
-                if (!is_adjacent(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
-                    std::vector<sq_i> path = find_hermes_path(from_sq, to_sq, board);
-                    for (const auto step: path) {
-                        text += square_to_text(step);
-                    }
-                    text += square_to_text(build_sq);
-                }
-                else {
-                    text += square_to_text(to_sq);
-                    text += square_to_text(build_sq);
-                }
-                break;
-            }
-
-            case Constants::God::DEMETER:
-            case Constants::God::HEPHAESTUS:
-            case Constants::God::PROMETHEUS:
-                text += square_to_text(to_sq);
-                text += square_to_text(build_sq);
-                if (extra_build_sq) {
-                    text += square_to_text(*extra_build_sq);
-                }
-                break;
-
-            case Constants::God::ATLAS:
-                text += square_to_text(to_sq);
-                text += square_to_text(build_sq);
-                if (dome) {
-                    text += 'D';
-                }
-                break;
-
-            default: // Handles Apollo, Minotaur, Pan, Athena, etc.
-                text += square_to_text(to_sq);
-                text += square_to_text(build_sq);
-                break;
+            text += square_to_text(to_sq);
+            text += square_to_text(build_sq);
+            break;
         }
-        return text;
+
+        case Constants::God::HERMES: {
+             if (!is_adjacent(from_sq, to_sq)) {
+                std::vector<sq_i> path = find_hermes_path(from_sq, to_sq, board);
+                // The path from the helper includes the start square, so skip it
+                for (size_t i = 1; i < path.size(); ++i) {
+                    text += square_to_text(path[i]);
+                }
+             } else {
+                text += square_to_text(to_sq);
+             }
+             text += square_to_text(build_sq);
+             break;
+        }
+
+        case Constants::God::DEMETER:
+        case Constants::God::HEPHAESTUS:
+        case Constants::God::PROMETHEUS:
+            text += square_to_text(to_sq);
+            text += square_to_text(build_sq);
+            if (extra_build_sq) {
+                text += square_to_text(*extra_build_sq);
+            }
+            break;
+
+        case Constants::God::ATLAS:
+            text += square_to_text(to_sq);
+            text += square_to_text(build_sq);
+            if (dome) {
+                text += 'D';
+            }
+            break;
+
+        default: // Handles Apollo, Minotaur, Pan, Athena, etc.
+            text += square_to_text(to_sq);
+            text += square_to_text(build_sq);
+            break;
     }
+    return text;
+  }
 
 } // namespace Santorini::Moves
 

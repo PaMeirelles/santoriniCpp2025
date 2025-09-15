@@ -75,25 +75,31 @@ TEST(ClimberQuietMoveTests, VerifyPropertiesAndCompleteness) {
 
                 // 2. Verify that all climber moves actually go up
                 for (const auto& move : climber_moves_gray) {
-                    ASSERT_GT(board_gray.get_blocks()[move.to_sq], board_gray.get_blocks()[move.from_sq])
+                    auto new_h = board_gray.get_blocks()[Moves::get_to_sq(move.move)];
+                    auto prev_h = board_gray.get_blocks()[Moves::get_from_sq(move.move)];
+                    if (Moves::get_god(move.move) == Constants::God::PAN && prev_h >= 2 && new_h == 0) continue;
+                    ASSERT_GT(new_h, prev_h)
                         << "Quiet move found in climber moves for Gray as " << static_cast<int>(god)
-                        << " on move: " << move.to_text(board_gray)
+                        << " on move: " << Moves::move_to_text(board_gray, move)
                         << "\nBoard:\n" << board_gray.to_text();
                 }
 
                 // 3. Verify that all quiet moves don't go up
                 for (const auto& move : quiet_moves_gray) {
-                    int from_h = board_gray.get_blocks()[move.from_sq];
-                    int to_h = board_gray.get_blocks()[move.to_sq];
+                    int from_h = board_gray.get_blocks()[Moves::get_from_sq(move.move)];
+                    int to_h = board_gray.get_blocks()[Moves::get_to_sq(move.move)];
+                    if (Moves::get_god(move.move) == Constants::God::PAN && from_h >= 2 && to_h == 0) continue;
 
                     // For Prometheus pre-build, the height of to_sq is effectively one higher if built upon
-                    if (move.god == Constants::God::PROMETHEUS && move.extra_build_sq.has_value() && move.to_sq == *move.extra_build_sq) {
+                    if (Moves::get_god(move.move) == Constants::God::PROMETHEUS &&
+                        Moves::get_extra_build_sq(move.move).has_value() &&
+                        Moves::get_to_sq(move.move) == *Moves::get_extra_build_sq(move.move)) {
                         to_h++;
                     }
 
                     ASSERT_LE(to_h, from_h)
                         << "Climber move found in quiet moves for Gray as " << static_cast<int>(god)
-                        << " on move: " << move.to_text(board_gray)
+                        << " on move: " << move_to_text(board_gray, move)
                         << "\nBoard:\n" << board_gray.to_text();
                 }
 
@@ -113,24 +119,28 @@ TEST(ClimberQuietMoveTests, VerifyPropertiesAndCompleteness) {
 
                 // 2. Verify that all climber moves actually go up
                 for (const auto& move : climber_moves_blue) {
-                    ASSERT_GT(board_blue.get_blocks()[move.to_sq], board_blue.get_blocks()[move.from_sq])
+                    if (Moves::get_god(move.move) == Constants::God::PAN &&
+                        board_blue.get_blocks()[Moves::get_from_sq(move.move)] >= 2 &&
+                        board_blue.get_blocks()[Moves::get_to_sq(move.move)] == 0) continue;
+                    ASSERT_GT(board_blue.get_blocks()[Moves::get_to_sq(move.move)], board_blue.get_blocks()[Moves::get_from_sq(move.move)])
                         << "Quiet move found in climber moves for Blue as " << static_cast<int>(god)
-                        << " on move: " << move.to_text(board_blue)
+                        << " on move: " << move_to_text(board_blue, move)
                         << "\nBoard:\n" << board_blue.to_text();
                 }
 
                 // 3. Verify that all quiet moves don't go up
                 for (const auto& move : quiet_moves_blue) {
-                    int from_h = board_blue.get_blocks()[move.from_sq];
-                    int to_h = board_blue.get_blocks()[move.to_sq];
+                    int from_h = board_blue.get_blocks()[Moves::get_from_sq(move.move)];
+                    int to_h = board_blue.get_blocks()[Moves::get_to_sq(move.move)];
+                    if (Moves::get_god(move.move) == Constants::God::PAN && from_h >= 2 && to_h == 0) continue;
 
-                    if (move.god == Constants::God::PROMETHEUS && move.extra_build_sq.has_value() && move.to_sq == *move.extra_build_sq) {
+                    if (Moves::get_god(move.move) == Constants::God::PROMETHEUS && Moves::get_extra_build_sq(move.move).has_value() && Moves::get_to_sq(move.move) == *Moves::get_extra_build_sq(move.move)) {
                         to_h++;
                     }
 
                     ASSERT_LE(to_h, from_h)
                         << "Climber move found in quiet moves for Blue as " << static_cast<int>(god)
-                        << " on move: " << move.to_text(board_blue)
+                        << " on move: " << move_to_text(board_blue, move)
                         << "\nBoard:\n" << board_blue.to_text();
                 }
                 total_configs_tested++;

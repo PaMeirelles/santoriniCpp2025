@@ -21,7 +21,7 @@ namespace Santorini {
         Board board = create_board(blocks, {0, 2}, {3, 4}, 1, Constants::God::PAN, Constants::God::APOLLO);
 
         // Move from 0 (height 2) down to 1 (height 0), a difference of -2.
-        Moves::Move move(0, 1, 5, Constants::God::PAN);
+        Moves::Move move = Moves::create_move(0, 1, 5, Constants::God::PAN);
         EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Pan's move should be valid";
         board.make_move(move);
 

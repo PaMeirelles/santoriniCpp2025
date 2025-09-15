@@ -24,7 +24,7 @@ namespace Santorini {
                                    Constants::God::MINOTAUR, Constants::God::APOLLO);
 
         // Attempt push from 0->1 => that's up 2 levels => invalid
-        Moves::Move move(0, 1, 5, Constants::God::MINOTAUR);
+        Moves::Move move = Moves::create_move(0, 1, 5, Constants::God::MINOTAUR);
         EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Minotaur cannot push to a square that is 2 or more levels higher";
     }
 
@@ -43,8 +43,8 @@ namespace Santorini {
 
         // Gray tries to move from 5->0, which would push the opponent off the board.
         // From 5->0 is a vector (-5, 0). Push square is (0-5) = -5.
-        Moves::Move move_fail(5, 0, 1, Constants::God::MINOTAUR);
-        EXPECT_FALSE(is_move_in_generated_list(test_board, move_fail)) << "Minotaur cannot push a worker off the board";
+        Moves::Move move = Moves::create_move(5, 0, 1, Constants::God::MINOTAUR);
+        EXPECT_FALSE(is_move_in_generated_list(test_board, move)) << "Minotaur cannot push a worker off the board";
     }
 
     TEST(MinotaurTests, cannot_build_where_you_push) {
@@ -53,7 +53,7 @@ namespace Santorini {
         // Minotaur (Gray) at 1 tries to push opponent (Blue) at 2.
         // The push square is 3 (1->2 is vector (1,0), so 2+(1,0) = 3).
         // The build square is also 3. This should be invalid.
-        Moves::Move move(1, 2, 3, Constants::God::MINOTAUR);
+        Moves::Move move = Moves::create_move(1, 2, 3, Constants::God::MINOTAUR);
         EXPECT_FALSE(is_move_in_generated_list(board, move)) << "Minotaur cannot build on the square where the opponent is pushed";
     }
 
@@ -70,8 +70,8 @@ namespace Santorini {
 
         // Minotaur moves from 2->3, pushing Blue worker from 3->4.
         // The pushed worker lands on a level 3 block, but this does not count as a win.
-        Moves::Move move(2, 3, 2, Constants::God::MINOTAUR);
-        move.minotaur_pushed = true; // Manually set flag for test clarity
+        Moves::Move move = Moves::create_move(2, 3, 2, Constants::God::MINOTAUR);
+        Moves::set_minotaur_push(move.move, true);
         EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Move should be valid";
         board.make_move(move);
 
