@@ -204,14 +204,15 @@ int main() {
         auto mv = get_best_move(*board, 60000000, tt, 5);
         std::cout << mv.best_move->to_text(*board) << std::endl;
     }
+    // auto pos = "0N1N0N0N0N0G0N2B1N0N4N0N2N0N0N1N1B4N4N0N0N4N2N2G2N1320";
     // Santorini::Board board = Santorini::Board(pos);
     // Santorini::TranspositionTable tt = Santorini::TranspositionTable();
-    // // for (int i=0; i < 100000; i++) auto mvs = board.generate_moves();
+    // // // for (int i=0; i < 100000; i++) auto mvs = board.generate_moves();
     // auto start_time = std::chrono::high_resolution_clock::now();
-    // auto mv = get_best_move(board, 60000000, tt, 6);
+    // auto mv = get_best_move(board, 12353, tt);
     // auto end_time = std::chrono::high_resolution_clock::now();
     // auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     // std::cout << "get_best_move() execution time: " << duration_ms.count() << " milliseconds" << std::endl;
-    // std::cout << mv->to_text(board) << std::endl;
+    // std::cout << mv.best_move->to_text(board) << std::endl;
     return 0;
 }

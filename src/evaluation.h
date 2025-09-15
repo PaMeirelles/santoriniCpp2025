@@ -1,14 +1,13 @@
 #pragma once
 
 #include <vector>
-#include <numeric>
 #include <algorithm>
 #include "board.h"
 #include "constants.h"
 
 namespace Santorini {
 
-const std::array<int, 25> POS_GAPS = {
+const std::array POS_GAPS = {
     0, 1, 2, 1, 0,
     1, 2, 3, 2, 1,
     2, 3, 4, 3, 2,
@@ -49,12 +48,12 @@ const Parameters PARAMS(
 constexpr int TEMPO = 50;
 
 inline int score_position(const Board& b, const Parameters& params = PARAMS) {
-    auto score_worker = [&](int worker_idx) -> int {
-        sq_i square = b.get_workers()[worker_idx];
-        int height = b.get_blocks()[square];
+    auto score_worker = [&](const int worker_idx) -> int {
+        const sq_i square = b.get_workers()[worker_idx];
+        const int height = b.get_blocks()[square];
 
-        int p_score = params.posScore[square];
-        int h_score = params.heightScore[height];
+        const int p_score = params.posScore[square];
+        const int h_score = params.heightScore[height];
 
         int same_h = 0;
         int next_h = 0;
@@ -91,7 +90,7 @@ inline int score_position(const Board& b, const Parameters& params = PARAMS) {
             next_next_h = 0;
         }
 
-        int support = params.sameHeightSupport[same_h]
+        const int support = params.sameHeightSupport[same_h]
                     + params.nextHeightSupport[next_h]
                     + params.prevHeightSupport[prev_h]
                     + params.nextNextHeightSupport[next_next_h];

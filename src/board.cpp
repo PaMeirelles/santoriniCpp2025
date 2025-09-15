@@ -832,6 +832,7 @@ bool Board::_blocked_by_athena(const int from_sq, const int to_sq) const {
 // --- Apollo ---
 std::vector<Moves::Move> Board::_generate_climber_apollo_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -862,6 +863,7 @@ std::vector<Moves::Move> Board::_generate_climber_apollo_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_apollo_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -889,6 +891,7 @@ std::vector<Moves::Move> Board::_generate_quiet_apollo_moves() const {
 // --- Artemis ---
 std::vector<Moves::Move> Board::_generate_climber_artemis_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -933,6 +936,7 @@ std::vector<Moves::Move> Board::_generate_climber_artemis_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_artemis_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -971,6 +975,7 @@ std::vector<Moves::Move> Board::_generate_quiet_artemis_moves() const {
 // --- Athena ---
 std::vector<Moves::Move> Board::_generate_climber_athena_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -995,6 +1000,7 @@ std::vector<Moves::Move> Board::_generate_climber_athena_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_athena_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1017,6 +1023,7 @@ std::vector<Moves::Move> Board::_generate_quiet_athena_moves() const {
 // --- Atlas ---
 std::vector<Moves::Move> Board::_generate_climber_atlas_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1052,6 +1059,7 @@ std::vector<Moves::Move> Board::_generate_climber_atlas_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_atlas_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1083,6 +1091,7 @@ std::vector<Moves::Move> Board::_generate_quiet_atlas_moves() const {
 // --- Demeter ---
 std::vector<Moves::Move> Board::_generate_climber_demeter_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1118,6 +1127,7 @@ std::vector<Moves::Move> Board::_generate_climber_demeter_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_demeter_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1152,6 +1162,7 @@ std::vector<Moves::Move> Board::_generate_quiet_demeter_moves() const {
 // --- Hephaestus ---
 std::vector<Moves::Move> Board::_generate_climber_hephaestus_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1183,6 +1194,7 @@ std::vector<Moves::Move> Board::_generate_climber_hephaestus_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_hephaestus_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1211,6 +1223,7 @@ std::vector<Moves::Move> Board::_generate_quiet_hephaestus_moves() const {
 // --- Hermes ---
 std::vector<Moves::Move> Board::_generate_climber_hermes_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1236,6 +1249,7 @@ std::vector<Moves::Move> Board::_generate_climber_hermes_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_hermes_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
     for (int i = 0; i < 2; ++i) {
         sq_i from_sq = _workers[start_idx + i];
@@ -1286,6 +1300,7 @@ std::vector<Moves::Move> Board::_generate_quiet_hermes_moves() const {
 // --- Minotaur ---
 std::vector<Moves::Move> Board::_generate_climber_minotaur_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1324,6 +1339,7 @@ std::vector<Moves::Move> Board::_generate_climber_minotaur_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_minotaur_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1361,6 +1377,7 @@ std::vector<Moves::Move> Board::_generate_quiet_minotaur_moves() const {
 // --- Pan ---
 std::vector<Moves::Move> Board::_generate_climber_pan_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1389,6 +1406,7 @@ std::vector<Moves::Move> Board::_generate_climber_pan_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_pan_moves() const {
   std::vector<Moves::Move> moves;
+    moves.reserve(250);
   int start_idx = (_turn == 1) ? 0 : 2;
 
   for (int i = 0; i < 2; ++i) {
@@ -1415,6 +1433,7 @@ std::vector<Moves::Move> Board::_generate_quiet_pan_moves() const {
 // --- Prometheus ---
 std::vector<Moves::Move> Board::_generate_climber_prometheus_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
 
     for (int i = 0; i < 2; ++i) {
@@ -1440,6 +1459,7 @@ std::vector<Moves::Move> Board::_generate_climber_prometheus_moves() const {
 
 std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
     std::vector<Moves::Move> moves;
+    moves.reserve(250);
     int start_idx = (_turn == 1) ? 0 : 2;
     for (int i = 0; i < 2; ++i) {
         sq_i from_sq = _workers[start_idx + i];
