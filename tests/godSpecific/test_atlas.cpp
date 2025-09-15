@@ -24,9 +24,9 @@ namespace Santorini {
                                    Constants::God::ATLAS, Constants::God::APOLLO);
 
         // Gray uses Atlas power to move from 0->5, then build a dome at 6
-        Moves::Move move_atlas = Moves::create_move(0, 5, 6, Constants::God::ATLAS);
-        Moves::set_dome(move_atlas.move, true);
-        Moves::set_prev_height(move_atlas.move, board._blocks[6]);
+        Moves::Move move_atlas(0, 5, 6, Constants::God::ATLAS);
+        move_atlas.dome = true;
+        move_atlas.atlas_original_height = board._blocks[6]; // Store original height for undo
         EXPECT_TRUE(is_move_in_generated_list(board, move_atlas)) << "Atlas move to build a dome should be valid";
         board.make_move(move_atlas);
 
@@ -35,7 +35,7 @@ namespace Santorini {
 
         // Now it's Blue's turn (board.turn should be -1 for Blue).
         // Blue tries to move onto square 6 (the dome) => should be invalid
-        Moves::Move move_blue = Moves::create_move(1, 6, 2, Constants::God::APOLLO); // Blue worker at 1 tries to move to 6, build at 2
+        Moves::Move move_blue(1, 6, 2, Constants::God::APOLLO); // Blue worker at 1 tries to move to 6, build at 2
         EXPECT_FALSE(is_move_in_generated_list(board, move_blue)) << "Opponent should not be able to move onto a dome";
     }
 

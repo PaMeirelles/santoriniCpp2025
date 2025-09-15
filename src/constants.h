@@ -60,7 +60,6 @@ constexpr int NUM_SQUARES = 25;
 constexpr int NUM_BLOCK_LEVELS = 4;
 constexpr int NUM_WORKER_TYPES = 5;
 constexpr int NUM_PLAYERS = 2;
-constexpr int NO_SQ = 25;
 
 // Zobrist hash keys for each block level on each square
 const std::array<std::array<uint64_t, 4>, 25> ZOBRIST_BLOCKS = {{

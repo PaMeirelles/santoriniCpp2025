@@ -76,7 +76,7 @@ TEST(TestPositionParsing, AthenaFlagParsed) {
     blocks[4] = 1; // Blue needs a square to move up to
     Board board = create_board(blocks, {0, 1}, {2, 3}, -1, Constants::God::ATHENA, Constants::God::APOLLO, true);
 
-    Moves::Move move = Moves::create_move(3, 4, 8, Constants::God::APOLLO);
+    Moves::Move move(3, 4, 8, Constants::God::APOLLO);
     EXPECT_FALSE(is_move_in_generated_list(board, move));
 }
 

@@ -8,7 +8,6 @@
 #include "board.h"
 #include "transposition_table.h"
 #include "search.h"
-#include "moves.h"
 
 namespace Santorini {
 
@@ -87,7 +86,7 @@ public:
                 if (!result.best_move) {
                     std::cout << "bestmove none" << std::endl;
                 } else {
-                    std::cout << "bestmove " << move_to_text(*board, *result.best_move) << std::endl;
+                    std::cout << "bestmove " << result.best_move->to_text(*board) << std::endl;
                 }
 
             } else if (command == "quit") {

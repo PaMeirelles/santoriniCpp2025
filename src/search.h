@@ -126,7 +126,7 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
     auto current_god = board.get_current_god();
     for (auto& mv : moves) {
         // Pan's winning move should be scored highly, then we continue to the next move.
-        if (current_god == Constants::God::PAN && board.get_blocks()[Moves::get_from_sq(mv.move)] >= 2 && board.get_blocks()[Moves::get_to_sq(mv.move)] == 0) {
+        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
             mv.score = 1000000;
             return;
         }
@@ -145,7 +145,7 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         }
 
         sq_i ally, enemy_1, enemy_2;
-        int mover = board.get_workers_map()[Moves::get_from_sq(mv.move)];
+        int mover = board.get_workers_map()[mv.from_sq];
 
         switch (mover) {
             case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
@@ -157,7 +157,7 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
 
         // --- Block Scoring Logic (REVISED) ---
         int current_block_score = 0;
-        sq_i worker_height = board.get_blocks()[Moves::get_to_sq(mv.move)];
+        sq_i worker_height = board.get_blocks()[mv.to_sq];
 
         // Helper lambda to score a single build action based on a given scoring matrix
         auto score_a_build = [&](sq_i build_sq, const auto& matrix) {
@@ -177,26 +177,26 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         };
 
         // If the extra build is on the same square, use the double scoring matrix for the whole action.
-        if (Moves::get_extra_build_sq(mv.move).has_value() && Moves::get_extra_build_sq(mv.move).value() == Moves::get_build_sq(mv.move)) {
-            current_block_score = score_a_build(Moves::get_build_sq(mv.move), BLOCK_SCORING_DOUBLE);
+        if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
+            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOUBLE);
         } else {
-            if (Moves::is_dome(mv.move)) {
-                current_block_score = score_a_build(Moves::get_build_sq(mv.move), BLOCK_SCORING_DOME);
+            if (mv.dome) {
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOME);
             }
             else {
-                current_block_score = score_a_build(Moves::get_build_sq(mv.move), BLOCK_SCORING_SINGLE);
+                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
             }
-            if (Moves::get_extra_build_sq(mv.move).has_value()) {
-                current_block_score += score_a_build(Moves::get_extra_build_sq(mv.move).value(), BLOCK_SCORING_SINGLE);
+            if (mv.extra_build_sq.has_value()) {
+                current_block_score += score_a_build(mv.extra_build_sq.value(), BLOCK_SCORING_SINGLE);
             }
         }
 
         // --- Final Score Calculation ---
-        const sq_i from_h = board.get_blocks()[Moves::get_from_sq(mv.move)];
-        const sq_i to_h = board.get_blocks()[Moves::get_to_sq(mv.move)];
+        const sq_i from_h = board.get_blocks()[mv.from_sq];
+        const sq_i to_h = board.get_blocks()[mv.to_sq];
         mv.score = HEIGHT_SCORING[from_h][to_h] * 800 +
             current_block_score * 10 +
-            (Constants::DOUBLE_NEIGHBORS[Moves::get_to_sq(mv.move)] - Constants::DOUBLE_NEIGHBORS[Moves::get_from_sq(mv.move)]);
+            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
     }
 }
 
@@ -246,11 +246,11 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
     for (size_t i = 0; i < climber_moves.size(); ++i) {
         pick_move(climber_moves, i);
         auto& move = climber_moves[i];
-        if (visited_to_sq[Moves::get_to_sq(move.move)]) {
+        if (visited_to_sq[move.to_sq]) {
             continue;
         }
         search_info.board.make_move(move);
-        visited_to_sq[Moves::get_to_sq(move.move)] = true;
+        visited_to_sq[move.to_sq] = true;
         int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1);
         search_info.board.unmake_move(move);
 

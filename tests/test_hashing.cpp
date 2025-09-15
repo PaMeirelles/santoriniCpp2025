@@ -119,20 +119,19 @@ namespace Santorini {
     //----------------------------------------------------------------------------------------------------------------------
 
     TEST(TestBoardHashing, HashConsistentAfterMakeUnmake) {
-        auto scenarios = get_stress_scenarios();
+        auto scenarios = Santorini::get_stress_scenarios();
         for (auto& board : scenarios) {
             uint64_t start_hash = board.get_hash();
             std::string start_pos = board.to_text();
 
             auto moves = board.generate_moves();
             for (const auto& move : moves) {
-                auto god = Moves::get_god(move.move);
                 board.make_move(move);
                 board.unmake_move(move);
                 ASSERT_EQ(board.get_hash(), start_hash)
-                    << "Hash mismatch for gods on move " << move_to_text(board, move) << "on board " << board.to_text();
+                    << "Hash mismatch for gods on move " << move.to_text(board);
                 ASSERT_EQ(board.to_text(), start_pos)
-                    << "Board state changed after make/unmake on move " << move_to_text(board, move);
+                    << "Board state changed after make/unmake on move " << move.to_text(board);
             }
         }
     }
@@ -152,7 +151,7 @@ namespace Santorini {
                 uint64_t rebuilt_hash = rebuilt_board.get_hash();
 
                 ASSERT_EQ(live_hash, rebuilt_hash)
-                    << "Rebuild hash mismatch on move " << move_to_text(board, move)
+                    << "Rebuild hash mismatch on move " << move.to_text(board)
                     << "\nLive:    " << live_hash
                     << "\nRebuilt: " << rebuilt_hash;
             }

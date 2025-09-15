@@ -17,8 +17,9 @@ namespace Santorini {
             auto moves = board.generate_moves();
             for (const auto& move : moves) {
                 ASSERT_TRUE(is_move_in_generated_list(board, move))
-                    << "Generated move " << Moves::move_to_text(board, move)
-                    << " was deemed invalid on board:\n"
+                    << "Generated move " << move.to_text(board)
+                    << " was deemed invalid for gods "
+                    << static_cast<int>(move.god) << " on board:\n"
                     << board.to_text();
             }
         }
