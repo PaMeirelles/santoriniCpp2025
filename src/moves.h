@@ -86,6 +86,9 @@ namespace Moves {
              dome == other.dome &&
              extra_build_sq == other.extra_build_sq;
     }
+    bool operator<(const Move& other) const {
+      return score > other.score;
+    }
   };
 
 } // namespace Santorini::Moves

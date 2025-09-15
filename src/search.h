@@ -395,9 +395,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     }
 
     score_moves(quiet_moves, search_info.board, k_moves, ply);
-
+    std::sort(quiet_moves.begin(), quiet_moves.end());
     for (size_t i = 0; i < quiet_moves.size(); ++i) {
-        pick_move(quiet_moves, i);
         auto& move = quiet_moves[i];
 
         // Skip if this is the TT move we already searched
