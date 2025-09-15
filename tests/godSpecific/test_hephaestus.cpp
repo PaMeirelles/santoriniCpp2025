@@ -35,6 +35,15 @@ TEST(HephaestusTests, can_build_only_once_if_desired) {
     EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Hephaestus should be able to build only once if desired";
 }
 
+TEST(HephaestusTests, can_build_twice_if_desired) {
+    Board board = create_board(std::nullopt, {0, 10}, {23, 24}, 1, Constants::God::HEPHAESTUS, Constants::God::ARTEMIS);
+
+    // From 0->1, build at 2 only once. No second build square.
+    Moves::Move move(0, 1, 2, Constants::God::HEPHAESTUS); // Only build_sq_1 is provided
+    move.extra_build_sq = 2;
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Hephaestus should be able to build only once if desired";
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 TEST(HephaestusTests, cannot_dome_on_second_build) {

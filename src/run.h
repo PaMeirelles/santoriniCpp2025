@@ -30,6 +30,7 @@ public:
                     position_str.erase(0, position_str.find_first_not_of(" \t\n\r"));
                     try {
                         board.emplace(position_str);
+                        tt.clear();
                         std::cout << "Position set." << std::endl;
                     } catch (const std::exception& e) {
                         std::cerr << "Error setting position: " << e.what() << std::endl;

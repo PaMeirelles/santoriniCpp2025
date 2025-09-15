@@ -42,4 +42,14 @@ TEST(DemeterTests, can_build_only_once_if_desired) {
     EXPECT_EQ(board._blocks[2], 1) << "Square 2 should have a height of 1 after Demeter's single build";
 }
 
+TEST(DemeterTests, can_build_twice_if_desired) {
+    Board board = create_board(std::nullopt, {0, 10}, {23, 24}, 1, Constants::God::DEMETER, Constants::God::ARTEMIS);
+
+    // From 0->1, build at 2 only once. No second build square.
+    // DemeterMove constructor:sqfrom,sqto,sqb1, optional<sq> b2 = nullopt
+    Moves::Move move(0, 1, 2, Constants::God::DEMETER);
+    move.extra_build_sq = 5;
+    EXPECT_TRUE(is_move_in_generated_list(board, move)) << "Demeter should be able to build only once if desired";
+}
+
 } // namespace Santorini

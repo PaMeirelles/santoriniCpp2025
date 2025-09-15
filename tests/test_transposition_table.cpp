@@ -13,26 +13,99 @@ protected:
     TranspositionTable tt{1 << 16}; // Use a smaller table for tests
 };
 
-TEST_F(TranspositionTableTest, StoreAndProbe) {
+// Test storing an entry and probing it for an exact score match.
+TEST_F(TranspositionTableTest, ProbeExactScore) {
     Moves::Move move(0, 5, 6, Constants::God::APOLLO);
     int score = 100;
     int depth = 5;
     char flag = 'E'; // Exact score
 
-    // Store the entry
     tt.store(board, move, score, depth, flag);
     EXPECT_EQ(tt.new_writes, 1);
-    EXPECT_EQ(tt.overwrites, 0);
 
-    // Probe and check if we get the same data back
-    auto [probed_move, probed_score] = tt.probe(board, 50, 150, depth);
+    std::optional<Moves::Move> probed_move;
+    std::optional<int> probed_score;
+    // An exact score between alpha and beta should cause a cutoff.
+    bool cutoff = tt.probe(board, 50, 150, depth, &probed_move, &probed_score);
 
-    ASSERT_NE(probed_move, nullptr);
+    EXPECT_TRUE(cutoff);
+    ASSERT_TRUE(probed_move.has_value());
     EXPECT_EQ(probed_move->to_text(board), move.to_text(board));
     ASSERT_TRUE(probed_score.has_value());
     EXPECT_EQ(*probed_score, score);
     EXPECT_EQ(tt.hits, 1);
 }
+
+// Test when the stored score is a lower bound and causes a beta-cutoff.
+TEST_F(TranspositionTableTest, ProbeBetaCutoff) {
+    Moves::Move move(0, 5, 6, Constants::God::APOLLO);
+    int score = 200; // A score that will be >= beta
+    int depth = 5;
+    char flag = 'B'; // Lower bound (beta)
+
+    tt.store(board, move, score, depth, flag);
+
+    std::optional<Moves::Move> probed_move;
+    std::optional<int> probed_score;
+    int alpha = 50;
+    int beta = 150;
+    bool cutoff = tt.probe(board, alpha, beta, depth, &probed_move, &probed_score);
+
+    EXPECT_TRUE(cutoff);
+    ASSERT_TRUE(probed_move.has_value());
+    EXPECT_EQ(probed_move->to_text(board), move.to_text(board));
+    ASSERT_TRUE(probed_score.has_value());
+    EXPECT_EQ(*probed_score, beta); // Should return beta for the cutoff
+    EXPECT_EQ(tt.hits, 1);
+    EXPECT_EQ(tt.cuts, 1);
+}
+
+// Test when the stored score is an upper bound and causes an alpha-cutoff.
+TEST_F(TranspositionTableTest, ProbeAlphaCutoff) {
+    Moves::Move move(0, 5, 6, Constants::God::APOLLO);
+    int score = 0; // A score that will be <= alpha
+    int depth = 5;
+    char flag = 'A'; // Upper bound (alpha)
+
+    tt.store(board, move, score, depth, flag);
+
+    std::optional<Moves::Move> probed_move;
+    std::optional<int> probed_score;
+    int alpha = 50;
+    int beta = 150;
+    bool cutoff = tt.probe(board, alpha, beta, depth, &probed_move, &probed_score);
+
+    EXPECT_TRUE(cutoff);
+    ASSERT_TRUE(probed_move.has_value());
+    EXPECT_EQ(probed_move->to_text(board), move.to_text(board));
+    ASSERT_TRUE(probed_score.has_value());
+    EXPECT_EQ(*probed_score, alpha); // Should return alpha for the cutoff
+    EXPECT_EQ(tt.hits, 1);
+    EXPECT_EQ(tt.cuts, 1);
+}
+
+// Test that no cutoff occurs if the stored entry's depth is insufficient.
+TEST_F(TranspositionTableTest, ProbeInsufficientDepth) {
+    Moves::Move move(0, 5, 6, Constants::God::APOLLO);
+    int score = 100;
+    int depth = 4; // Stored depth is less than search depth
+    char flag = 'E';
+
+    tt.store(board, move, score, depth, flag);
+
+    std::optional<Moves::Move> probed_move;
+    std::optional<int> probed_score;
+    // Search depth is greater than stored depth, so we can't use the score.
+    bool cutoff = tt.probe(board, 50, 150, 5, &probed_move, &probed_score);
+
+    EXPECT_FALSE(cutoff); // No cutoff should occur
+    ASSERT_TRUE(probed_move.has_value()); // But the move should still be returned for ordering
+    EXPECT_EQ(probed_move->to_text(board), move.to_text(board));
+    EXPECT_FALSE(probed_score.has_value()); // Score is not returned
+    EXPECT_EQ(tt.hits, 1);
+    EXPECT_EQ(tt.cuts, 0);
+}
+
 
 TEST_F(TranspositionTableTest, ClearTable) {
     Moves::Move move(0, 5, 6, Constants::God::APOLLO);
@@ -43,10 +116,15 @@ TEST_F(TranspositionTableTest, ClearTable) {
     EXPECT_EQ(tt.new_writes, 0);
     EXPECT_EQ(tt.overwrites, 0);
     EXPECT_EQ(tt.hits, 0);
+    EXPECT_EQ(tt.cuts, 0);
 
-    // Probing should now return nothing
-    auto [probed_move, probed_score] = tt.probe(board, 50, 150, 5);
-    EXPECT_EQ(probed_move, nullptr);
+    // Probing should now return nothing and not cause a cutoff
+    std::optional<Moves::Move> probed_move;
+    std::optional<int> probed_score;
+    bool cutoff = tt.probe(board, 50, 150, 5, &probed_move, &probed_score);
+
+    EXPECT_FALSE(cutoff);
+    EXPECT_FALSE(probed_move.has_value());
     EXPECT_FALSE(probed_score.has_value());
 }
 

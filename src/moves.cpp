@@ -5,15 +5,13 @@
 
 namespace Santorini::Moves {
 
-    // --- Utility Function Implementations ---
-    inline std::pair<int, int> get_coords(sq_i square) {
-        return { square % 5, square / 5 };
-    }
 
     bool is_adjacent(sq_i s1, sq_i s2) {
         if (s1 == s2) return false;
-        auto [r1, c1] = get_coords(s1);
-        auto [r2, c2] = get_coords(s2);
+        const auto r1 = s1 % 5;
+        const auto c1 = s1 / 5;
+        const auto r2 = s2 % 5;
+        const auto c2 = s2 / 5;
         return abs(r1 - r2) <= 1 && abs(c1 - c2) <= 1;
     }
 

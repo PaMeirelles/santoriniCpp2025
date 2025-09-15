@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_5.5.40_Velocity)
+project(Paladini_6.1.0_Prince)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,11 +18,11 @@ add_library(
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_5.5.40_Velocity src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Paladini_6.1.0_Prince src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_5.5.40_Velocity
+        Paladini_6.1.0_Prince
         PRIVATE santorini_engine
 )
 
