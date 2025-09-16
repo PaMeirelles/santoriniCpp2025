@@ -47,7 +47,6 @@ namespace Moves {
 
   // Declaration for pathfinding helper, which needs the Board definition in the .cpp file.
   std::vector<sq_i> find_hermes_path(sq_i from, sq_i to, const Santorini::Board& board);
-  bool is_adjacent(sq_i s1, sq_i s2);
 
   // #############################################################################
   // # The Unified Move Class

@@ -455,7 +455,7 @@ namespace Santorini {
 
   }
 
-  bool Board::_adj_ok(sq_i from, sq_i to) const {
+  bool adj_ok(sq_i from, sq_i to) {
     return Constants::ADJACENCY_MATRIX[from][to];
   }
 
@@ -494,12 +494,12 @@ namespace Santorini {
   }
 
   bool Board::_move_checks(sq_i from, sq_i to) const {
-    return _height_ok(from, to) && _adj_ok(from, to) && is_free(to);
+    return _height_ok(from, to) && adj_ok(from, to) && is_free(to);
   }
 
   bool Board::_build_ok(sq_i from, sq_i to, sq_i build) const {
 
-    if (!_adj_ok(to, build) || to == build) return false;
+    if (!adj_ok(to, build) || to == build) return false;
 
     return (from == build) || is_free(build);
 
@@ -1481,7 +1481,7 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
                 int temp_h_adj = (to_sq == opt_build_sq) ? 1 : 0;
                 if (_blocks[to_sq] + temp_h_adj > _blocks[from_sq]) continue;
                 if (!is_free(to_sq) && to_sq != from_sq) continue;
-                if (!_adj_ok(from_sq, to_sq)) continue;
+                if (!adj_ok(from_sq, to_sq)) continue;
                 for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
                     if (_build_ok(from_sq, to_sq, build_sq)) {
                         auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
@@ -1525,7 +1525,7 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
         }
 
         case Constants::God::APOLLO: {
-            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !_adj_ok(move.from_sq, move.to_sq))
+            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !adj_ok(move.from_sq, move.to_sq))
                 return false;
 
             auto occupant = _which_worker_is_here(move.to_sq);
@@ -1548,7 +1548,7 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
             if (!one_step_valid) {
                  for (sq_i mid_sq : Constants::NEIGHBOURS[move.from_sq]) {
                     if (_move_checks(move.from_sq, mid_sq)) {
-                        if (_adj_ok(mid_sq, move.to_sq) && move.to_sq != move.from_sq && is_free(move.to_sq)) {
+                        if (adj_ok(mid_sq, move.to_sq) && move.to_sq != move.from_sq && is_free(move.to_sq)) {
                            if (!_blocked_by_athena(mid_sq, move.to_sq) && _height_ok(mid_sq, move.to_sq)) {
                                two_step_valid = true;
                                break;
@@ -1624,7 +1624,7 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
         }
 
         case Constants::God::MINOTAUR: {
-            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !_adj_ok(move.from_sq, move.to_sq))
+            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !adj_ok(move.from_sq, move.to_sq))
                 return false;
 
             auto occupant = _which_worker_is_here(move.to_sq);
@@ -1649,7 +1649,7 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
                 int temp_h_adj = (move.to_sq == *move.extra_build_sq) ? 1 : 0;
                 if (_blocks[move.to_sq] + temp_h_adj > _blocks[move.from_sq]) return false;
 
-                if (!_adj_ok(move.from_sq, move.to_sq)) return false;
+                if (!adj_ok(move.from_sq, move.to_sq)) return false;
                 if (move.from_sq != move.to_sq && !is_free(move.to_sq)) return false;
 
             } else { // Standard move

@@ -4,17 +4,6 @@
 #include <queue>
 
 namespace Santorini::Moves {
-
-
-    bool is_adjacent(sq_i s1, sq_i s2) {
-        if (s1 == s2) return false;
-        const auto r1 = s1 % 5;
-        const auto c1 = s1 / 5;
-        const auto r2 = s2 % 5;
-        const auto c2 = s2 / 5;
-        return abs(r1 - r2) <= 1 && abs(c1 - c2) <= 1;
-    }
-
     /**
      * @brief Finds the shortest path for a Hermes move, considering the board state.
      *
@@ -66,10 +55,10 @@ namespace Santorini::Moves {
                 // If not a simple adjacent move, find a plausible intermediate square
                 // that respects board state (occupancy and height).
                 auto blocks = board.get_blocks();
-                if (!is_adjacent(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
+                if (!adj_ok(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
                     for (sq_i mid = 0; mid < 25; ++mid) {
                         // Check geometry
-                        if (mid == from_sq || mid == to_sq || !is_adjacent(from_sq, mid) || !is_adjacent(to_sq, mid)) {
+                        if (mid == from_sq || mid == to_sq || !adj_ok(from_sq, mid) || !adj_ok(to_sq, mid)) {
                             continue;
                         }
                         // Check board state for a valid two-step path
@@ -90,7 +79,7 @@ namespace Santorini::Moves {
 
             case Constants::God::HERMES: {
                 auto blocks = board.get_blocks();
-                if (!is_adjacent(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
+                if (!adj_ok(from_sq, to_sq) || blocks[to_sq] - blocks[from_sq] > 1) {
                     std::vector<sq_i> path = find_hermes_path(from_sq, to_sq, board);
                     for (const auto step: path) {
                         text += square_to_text(step);

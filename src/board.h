@@ -75,7 +75,6 @@ void _inc_block(sq_i s);
 void _dec_block(sq_i s);
 void _restore_block_height(sq_i s, int8_t original_height);
 bool _height_ok(sq_i from,sq_i to) const;
-bool _adj_ok(sq_i from,sq_i to) const;
 
 std::optional<sq_i> _calculate_push_square(sq_i from_sq, sq_i to_sq) const;
 bool _move_checks(sq_i from,sq_i to) const;
@@ -155,5 +154,5 @@ friend bool operator<(const Board& lhs, const Board& rhs);
 };
 
 bool operator<(const Board& lhs, const Board& rhs);
-
+bool adj_ok(sq_i from,sq_i to);
 } // namespace Santorini
