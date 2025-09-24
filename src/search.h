@@ -6,12 +6,14 @@
 #include <chrono>
 #include <algorithm>
 #include <set>
+#include <cmath>
 
 #include "board.h"
 #include "moves.h"
 #include "transposition_table.h"
 #include "evaluation.h"
 #include "killer_moves.h"
+
 
 namespace Santorini {
 
@@ -21,12 +23,33 @@ using sq_i = int8_t;
 constexpr int MATE = 10000;
 constexpr int CHECK_EVERY = 4096;
 constexpr int ASP_WINDOW = 50;
+constexpr int MIN_DEPTH = 2;
+constexpr int N_PROTECTED_MOVES = 2;
+constexpr float LMR_FACTOR = 5;
+
+inline int get_lmr_reduction(const int depth, const int move_index) {
+    if (move_index <= N_PROTECTED_MOVES) {
+        return 0.0;
+    }
+    auto reduction = (log2(depth) * log2(move_index)) / LMR_FACTOR;
+
+    if (depth - reduction < MIN_DEPTH) {
+        reduction = depth - MIN_DEPTH;
+    }
+
+    if (reduction < 0) return 0;
+
+    return static_cast<int>(reduction);
+}
+
 
 inline int adaptive_null_reduction(int depth) {
     if (depth >= 8) return 3;
     if (depth >= 4) return 2;
     return 1;
 }
+
+
 
 inline bool is_mate(int score) {
     return score > (MATE - 100) || score < (-MATE + 100);
@@ -145,9 +168,8 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
         }
 
         sq_i ally, enemy_1, enemy_2;
-        int mover = board.get_workers_map()[mv.from_sq];
 
-        switch (mover) {
+        switch (board.get_workers_map()[mv.from_sq]) {
             case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
             case 1: ally = 0; enemy_1 = 2; enemy_2 = 3; break;
             case 2: ally = 3; enemy_1 = 0; enemy_2 = 1; break;
@@ -296,8 +318,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     }
     std::optional<Moves::Move> tt_move_opt;
     std::optional<int> tt_score_opt;
-    bool tt_hit = tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt);
-    if (tt_hit) {
+    if (tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt)) {
         return *tt_score_opt;
     }
 
@@ -337,11 +358,12 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             }
         }
     }
-
+    int move_count = 0;
     auto climber_moves = search_info.board.generate_climber_moves();
     score_moves(climber_moves, search_info.board, k_moves, ply);
 
     for (size_t i = 0; i < climber_moves.size(); ++i) {
+        move_count++;
         pick_move(climber_moves, i);
         auto& move = climber_moves[i];
 
@@ -354,9 +376,9 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             search_info.bestMove = std::make_unique<Moves::Move>(move);
             return MATE - ply;
         }
-
+        auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+        int curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
@@ -386,9 +408,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
 
     score_moves(quiet_moves, search_info.board, k_moves, ply);
     std::sort(quiet_moves.begin(), quiet_moves.end());
-    for (size_t i = 0; i < quiet_moves.size(); ++i) {
-        auto& move = quiet_moves[i];
-
+    for (auto & move : quiet_moves) {
+        move_count++;
         if (tt_move_opt.has_value() && move == *tt_move_opt) {
             continue;
         }
@@ -398,9 +419,9 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             search_info.bestMove = std::make_unique<Moves::Move>(move);
             return MATE - ply;
         }
-
+        auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+        int curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {

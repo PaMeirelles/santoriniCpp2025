@@ -195,7 +195,7 @@ int main() {
     //     "0N0N0N0N0N0N0N0B1N0N0N0G0B0N0N1N0G0N0N0N0N0N0N0N0N0210",
     //     "3N0N3N1G2N1G0N0B3N0N0N0N0N0N0N0N0N1N1B0N0N0N0N0N0N1860",
     //     "0N0N3N0N0N1N0N0N0N1N0N0G0B0G1N0N0N0N0B0N0N0N1N1N0N0090"
-    //     };
+    // };
     // std::optional<Santorini::Board> board;
     // Santorini::TranspositionTable tt = Santorini::TranspositionTable();
     // for (auto pos: positions) {
