@@ -980,8 +980,8 @@ std::vector<Moves::Move> Board::_generate_climber_athena_moves() const {
 
   for (int i = 0; i < 2; ++i) {
     sq_i from_sq = _workers[start_idx + i];
-
     for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
+      if (_blocked_by_athena(from_sq, to_sq)) continue;
       if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
       if (!_move_checks(from_sq, to_sq)) continue;
 
