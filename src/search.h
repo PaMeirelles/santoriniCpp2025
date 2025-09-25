@@ -25,11 +25,11 @@ constexpr int CHECK_EVERY = 4096;
 constexpr int ASP_WINDOW = 50;
 constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
-constexpr float LMR_FACTOR = 6;
+constexpr float LMR_FACTOR = 5;
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
     if (move_index <= N_PROTECTED_MOVES) {
-        return 0.0;
+        return 0;
     }
     auto reduction = (log2(depth) * log2(move_index)) / LMR_FACTOR;
 
@@ -376,9 +376,17 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             search_info.bestMove = std::make_unique<Moves::Move>(move);
             return MATE - ply;
         }
+
+        int curr_score;
         auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
+        // Initial reduced search
+        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
+
+        // If the reduced search fails high, and a reduction was actually applied, research at full depth
+        if (reduction > 0 && curr_score > alpha) {
+            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+        }
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
@@ -419,9 +427,17 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             search_info.bestMove = std::make_unique<Moves::Move>(move);
             return MATE - ply;
         }
+
+        int curr_score;
         auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        int curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
+        // Initial reduced search
+        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
+
+        // If the reduced search fails high, and a reduction was actually applied, research at full depth
+        if (reduction > 0 && curr_score > alpha) {
+            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+        }
         search_info.board.unmake_move(move);
 
         if (search_info.quit) {
