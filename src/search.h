@@ -25,7 +25,7 @@ constexpr int CHECK_EVERY = 4096;
 constexpr int ASP_WINDOW = 50;
 constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
-constexpr float LMR_FACTOR = 5;
+constexpr float LMR_FACTOR = 4;
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
     if (move_index <= N_PROTECTED_MOVES) {
