@@ -37,12 +37,12 @@ struct Parameters {
 };
 
 const Parameters PARAMS(
-    /*centrality_gap=*/23,
-    /*h2_gap=*/223,
-    /*sh1=*/64, /*sh2=*/23,
-    /*nh1=*/75, /*nh2=*/36,
-    /*ph1=*/29, /*ph2=*/0,
-    /*nn1=*/3, /*nn2=*/24
+    /*centrality_gap=*/22,
+    /*h2_gap=*/216,
+    /*sh1=*/57, /*sh2=*/25,
+    /*nh1=*/77, /*nh2=*/33,
+    /*ph1=*/28, /*ph2=*/0,
+    /*nn1=*/8, /*nn2=*/23
 );
 
 constexpr int TEMPO = 50;
