@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_8.0.4_Firefly)
+project(Paladini_8.1_Firefly)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,11 +18,11 @@ add_library(
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_8.0.4_Firefly src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Paladini_8.1_Firefly src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_8.0.4_Firefly
+        Paladini_8.1_Firefly
         PRIVATE santorini_engine
 )
 
