@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <algorithm>
 #include <cmath> // Required for std::pow
 #include "board.h"
@@ -8,13 +9,11 @@
 
 namespace Santorini {
 
-// --- New Power Score Helper Function ---
-// Replaces the previous log_score function.
+// --- Power Score Helper Function (Unchanged) ---
 inline double power_score(const int count, const double multiplier, const double power) {
     if (count == 0 || multiplier == 0.0) {
         return 0.0;
     }
-    // Calculates score based on the model: y = multiplier * count^power
     return multiplier * std::pow(count, power);
 }
 
@@ -29,24 +28,26 @@ const std::array POS_GAPS = {
 
 constexpr int TEMPO = 50;
 
-// --- Parameters Struct (Refactored for Power Function) ---
+// --- Parameters Struct (Refactored for Height-Specific Parameters) ---
 struct Parameters {
     std::vector<int> posScore;
     std::vector<int> heightScore;
 
-    // Support parameters are now multipliers and powers
-    double sh_mult, sh_power;
-    double nh_mult, nh_power;
-    double ph_mult, ph_power;
-    double nn_mult, nn_power;
+    // Height-specific support parameters
+    double sh0_mult, sh0_power, nh0_mult, nh0_power, nn0_mult, nn0_power; // h=0
+    double sh1_mult, sh1_power, nh1_mult, nh1_power, ph1_mult, ph1_power, nn1_mult, nn1_power; // h=1
+    double sh2_mult, sh2_power, nh2_mult, nh2_power, ph2_mult, ph2_power; // h=2
 
     Parameters(int centrality_gap, int h2_gap,
-               double sh_mult, double sh_power, double nh_mult, double nh_power,
-               double ph_mult, double ph_power, double nn_mult, double nn_power)
-        : sh_mult(sh_mult), sh_power(sh_power),
-          nh_mult(nh_mult), nh_power(nh_power),
-          ph_mult(ph_mult), ph_power(ph_power),
-          nn_mult(nn_mult), nn_power(nn_power) {
+               // Height 0 params
+               double sh0_m, double sh0_p, double nh0_m, double nh0_p, double nn0_m, double nn0_p,
+               // Height 1 params
+               double sh1_m, double sh1_p, double nh1_m, double nh1_p, double ph1_m, double ph1_p, double nn1_m, double nn1_p,
+               // Height 2 params
+               double sh2_m, double sh2_p, double nh2_m, double nh2_p, double ph2_m, double ph2_p)
+        : sh0_mult(sh0_m), sh0_power(sh0_p), nh0_mult(nh0_m), nh0_power(nh0_p), nn0_mult(nn0_m), nn0_power(nn0_p),
+          sh1_mult(sh1_m), sh1_power(sh1_p), nh1_mult(nh1_m), nh1_power(nh1_p), ph1_mult(ph1_m), ph1_power(ph1_p), nn1_mult(nn1_m), nn1_power(nn1_p),
+          sh2_mult(sh2_m), sh2_power(sh2_p), nh2_mult(nh2_m), nh2_power(nh2_p), ph2_mult(ph2_m), ph2_power(ph2_p) {
 
         posScore.resize(25);
         for (int i = 0; i < 25; ++i) {
@@ -56,20 +57,26 @@ struct Parameters {
     }
 };
 
-// --- Global Parameters Instance (Updated for Power Function) ---
-// These values were calculated to approximate the previous log model's behavior.
-// The multiplier is the score for the 1st neighbor, and the power controls
-// the rate of diminishing returns.
+// --- Global Parameters Instance (Updated with Optimized Values) ---
 const Parameters PARAMS(
-    /*centrality_gap=*/45,
-    /*h2_gap=*/410,
-    /*sh_mult=*/82, /*sh_power=*/0.29,
-    /*nh_mult=*/130, /*nh_power=*/0.36,
-    /*ph_mult=*/50, /*ph_power=*/0.25,
-    /*nn_mult=*/42, /*nn_power=*/0.75
+    /*centrality_gap=*/50,
+    /*h2_gap=*/415,
+    // Height 0
+    /*sh0_mult=*/6,    /*sh0_power=*/0.1691,
+    /*nh0_mult=*/54,   /*nh0_power=*/0.5691,
+    /*nn0_mult=*/53,   /*nn0_power=*/0.8978,
+    // Height 1
+    /*sh1_mult=*/48,   /*sh1_power=*/0.2591,
+    /*nh1_mult=*/166,  /*nh1_power=*/0.6791,
+    /*ph1_mult=*/23,   /*ph1_power=*/0.4491,
+    /*nn1_mult=*/42,   /*nn1_power=*/0.6478,
+    // Height 2
+    /*sh2_mult=*/106,  /*sh2_power=*/0.5691,
+    /*nh2_mult=*/296,  /*nh2_power=*/1.0691,
+    /*ph2_mult=*/-30,  /*ph2_power=*/0.2191
 );
 
-// --- Main Evaluation Function (Updated) ---
+// --- Main Evaluation Function (Updated with Height-Specific Logic) ---
 inline int score_position(const Board& b, const Parameters& params = PARAMS) {
     auto score_worker = [&](const int worker_idx) -> int {
         const sq_i square = b.get_workers()[worker_idx];
@@ -90,19 +97,22 @@ inline int score_position(const Board& b, const Parameters& params = PARAMS) {
             }
         }
 
+        // Calculate support score using height-specific parameters
+        double support = 0.0;
         if (height == 0) {
-            prev_h = 0;
-            same_h = 0;
+            support += power_score(same_h, params.sh0_mult, params.sh0_power);
+            support += power_score(next_h, params.nh0_mult, params.nh0_power);
+            support += power_score(next_next_h, params.nn0_mult, params.nn0_power);
+        } else if (height == 1) {
+            support += power_score(same_h, params.sh1_mult, params.sh1_power);
+            support += power_score(next_h, params.nh1_mult, params.nh1_power);
+            support += power_score(prev_h, params.ph1_mult, params.ph1_power);
+            support += power_score(next_next_h, params.nn1_mult, params.nn1_power);
+        } else if (height == 2) {
+            support += power_score(same_h, params.sh2_mult, params.sh2_power);
+            support += power_score(next_h, params.nh2_mult, params.nh2_power);
+            support += power_score(prev_h, params.ph2_mult, params.ph2_power);
         }
-        if (height >= 2) {
-            next_next_h = 0;
-        }
-
-        // The support score is now calculated using the new power_score function
-        const double support = power_score(same_h, params.sh_mult, params.sh_power)
-                             + power_score(next_h, params.nh_mult, params.nh_power)
-                             + power_score(prev_h, params.ph_mult, params.ph_power)
-                             + power_score(next_next_h, params.nn_mult, params.nn_power);
 
         return p_score + h_score + static_cast<int>(support);
     };
