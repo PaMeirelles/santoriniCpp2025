@@ -61,12 +61,12 @@ struct Parameters {
 // The multiplier is the score for the 1st neighbor, and the power controls
 // the rate of diminishing returns.
 const Parameters PARAMS(
-    /*centrality_gap=*/25,
-    /*h2_gap=*/250,
-    /*sh_mult=*/60, /*sh_power=*/0.3691,
-    /*nh_mult=*/80, /*nh_power=*/0.3691,
-    /*ph_mult=*/20, /*ph_power=*/0.3691,
-    /*nn_mult=*/25, /*nn_power=*/0.4278
+    /*centrality_gap=*/45,
+    /*h2_gap=*/410,
+    /*sh_mult=*/82, /*sh_power=*/0.29,
+    /*nh_mult=*/130, /*nh_power=*/0.36,
+    /*ph_mult=*/50, /*ph_power=*/0.25,
+    /*nn_mult=*/42, /*nn_power=*/0.75
 );
 
 // --- Main Evaluation Function (Updated) ---
