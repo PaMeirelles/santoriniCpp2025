@@ -59,21 +59,21 @@ struct Parameters {
 
 // --- Global Parameters Instance (Updated with Optimized Values) ---
 const Parameters PARAMS(
-    /*centrality_gap=*/43,
-    /*h2_gap=*/430,
+    /*centrality_gap=*/42,
+    /*h2_gap=*/340,
     // Height 0
-    /*sh0_mult=*/24,   /*sh0_power=*/0.0691,
-    /*nh0_mult=*/53,   /*nh0_power=*/0.6491,
-    /*nn0_mult=*/64,   /*nn0_power=*/0.8078,
+    /*sh0_mult=*/-4,   /*sh0_power=*/0.1491,
+    /*nh0_mult=*/61,   /*nh0_power=*/0.6391,
+    /*nn0_mult=*/58,   /*nn0_power=*/0.9678,
     // Height 1
-    /*sh1_mult=*/42,   /*sh1_power=*/0.2891,
-    /*nh1_mult=*/187,  /*nh1_power=*/0.7391,
-    /*ph1_mult=*/16,   /*ph1_power=*/0.3991,
-    /*nn1_mult=*/56,   /*nn1_power=*/0.7078,
+    /*sh1_mult=*/52,   /*sh1_power=*/0.2791,
+    /*nh1_mult=*/175,  /*nh1_power=*/0.7191,
+    /*ph1_mult=*/10,   /*ph1_power=*/0.3791,
+    /*nn1_mult=*/43,   /*nn1_power=*/0.4078,
     // Height 2
-    /*sh2_mult=*/120,  /*sh2_power=*/0.7091,
-    /*nh2_mult=*/334,  /*nh2_power=*/1.0491,
-    /*ph2_mult=*/-64,  /*ph2_power=*/0.3891
+    /*sh2_mult=*/174,  /*sh2_power=*/0.5691,
+    /*nh2_mult=*/410,  /*nh2_power=*/1.1091,
+    /*ph2_mult=*/-26,  /*ph2_power=*/0.2491
 );
 
 // --- Main Evaluation Function (Updated with Height-Specific Logic) ---
