@@ -417,6 +417,18 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return -MATE + ply;
     }
 
+    // --- Futility Pruning ---
+    // At low depths, if the static evaluation is significantly worse than alpha,
+    // it's unlikely a quiet move will improve the situation enough to beat alpha.
+    // We can therefore prune (skip searching) all quiet moves.
+    if (depth > 0 && depth < FUTILITY_MARGINS.size() && !is_mate(alpha)) {
+        int static_eval = evaluate(search_info.board);
+        if (static_eval + FUTILITY_MARGINS[depth] <= alpha) {
+            goto after_quiet_moves;
+        }
+    }
+
+
     score_moves(quiet_moves, search_info.board, k_moves, ply);
     std::sort(quiet_moves.begin(), quiet_moves.end());
     for (auto & move : quiet_moves) {
@@ -434,13 +446,6 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         int curr_score;
         auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        if (depth - 1 < FUTILITY_MARGINS.size() && !is_mate(alpha)) {
-            int static_eval = evaluate(search_info.board);
-            if (static_eval + FUTILITY_MARGINS[depth - 1] <= alpha) {
-                search_info.board.unmake_move(move);
-                continue;
-            }
-        }
         // Initial reduced search
         curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
 
@@ -469,6 +474,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             }
         }
     }
+
+after_quiet_moves:;
 
     search_info.bestMove = std::move(best_move);
     if (!(ply == 0 && search_info.quit) && search_info.bestMove) {
