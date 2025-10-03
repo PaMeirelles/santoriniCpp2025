@@ -27,7 +27,7 @@ constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
 // Margins for futility pruning at depths 1 and 2 respectively.
-constexpr std::array<int, 3> FUTILITY_MARGINS = {{0, 200, 500}};
+constexpr std::array<int, 3> FUTILITY_MARGINS = {{0, 200, 400}};
 
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
