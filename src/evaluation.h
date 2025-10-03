@@ -28,7 +28,7 @@ const std::array POS_GAPS = {
 
 constexpr int TEMPO = 50;
 
-// --- Parameters Struct (Refactored for Height-Specific Parameters) ---
+// --- Parameters Struct (Unchanged) ---
 struct Parameters {
     std::vector<int> posScore;
     std::vector<int> heightScore;
@@ -57,26 +57,36 @@ struct Parameters {
     }
 };
 
-// --- Global Parameters Instance (Updated with Optimized Values) ---
+// --- Global Parameters Instance (UPDATED to match evaluation.py) ---
 const Parameters PARAMS(
-    /*centrality_gap=*/42,
-    /*h2_gap=*/340,
+    /*centrality_gap=*/50,      //
+    /*h2_gap=*/375,            //
     // Height 0
-    /*sh0_mult=*/-4,   /*sh0_power=*/0.1491,
-    /*nh0_mult=*/61,   /*nh0_power=*/0.6391,
-    /*nn0_mult=*/58,   /*nn0_power=*/0.9678,
+    /*sh0_mult=*/30.0,         //
+    /*sh0_power=*/-0.2,        //
+    /*nh0_mult=*/45.0,         //
+    /*nh0_power=*/0.8,         //
+    /*nn0_mult=*/55.0,         //
+    /*nn0_power=*/1.15,        //
     // Height 1
-    /*sh1_mult=*/52,   /*sh1_power=*/0.2791,
-    /*nh1_mult=*/175,  /*nh1_power=*/0.7191,
-    /*ph1_mult=*/10,   /*ph1_power=*/0.3791,
-    /*nn1_mult=*/43,   /*nn1_power=*/0.4078,
+    /*sh1_mult=*/50.0,         //
+    /*sh1_power=*/0.3,         //
+    /*nh1_mult=*/180.0,        //
+    /*nh1_power=*/0.75,        //
+    /*ph1_mult=*/55.0,         //
+    /*ph1_power=*/-0.35,       //
+    /*nn1_mult=*/55.0,         //
+    /*nn1_power=*/0.05,        //
     // Height 2
-    /*sh2_mult=*/174,  /*sh2_power=*/0.5691,
-    /*nh2_mult=*/410,  /*nh2_power=*/1.1091,
-    /*ph2_mult=*/-26,  /*ph2_power=*/0.2491
+    /*sh2_mult=*/210.0,        //
+    /*sh2_power=*/0.55,        //
+    /*nh2_mult=*/445.0,        //
+    /*nh2_power=*/1.15,        //
+    /*ph2_mult=*/-15.0,        //
+    /*ph2_power=*/0.95         //
 );
 
-// --- Main Evaluation Function (Updated with Height-Specific Logic) ---
+// --- Main Evaluation Function (Logic Unchanged) ---
 inline int score_position(const Board& b, const Parameters& params = PARAMS) {
     auto score_worker = [&](const int worker_idx) -> int {
         const sq_i square = b.get_workers()[worker_idx];
