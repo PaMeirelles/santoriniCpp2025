@@ -418,16 +418,19 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     }
 
     // --- Futility Pruning ---
-    // At low depths, if the static evaluation is significantly worse than alpha,
-    // it's unlikely a quiet move will improve the situation enough to beat alpha.
-    // We can therefore prune (skip searching) all quiet moves.
-    if (depth > 0 && depth < FUTILITY_MARGINS.size() && !is_mate(alpha)) {
+    if (depth < FUTILITY_MARGINS.size()) {
         int static_eval = evaluate(search_info.board);
-        if (static_eval + FUTILITY_MARGINS[depth] <= alpha) {
+
+        // Forward futility pruning
+        if (!is_mate(alpha) && static_eval + FUTILITY_MARGINS[depth] <= alpha) {
             goto after_quiet_moves;
         }
-    }
 
+        // Reverse futility pruning
+        if (!is_mate(beta) && static_eval - FUTILITY_MARGINS[depth] >= beta) {
+            return beta; // fail-high pruning
+        }
+    }
 
     score_moves(quiet_moves, search_info.board, k_moves, ply);
     std::sort(quiet_moves.begin(), quiet_moves.end());
