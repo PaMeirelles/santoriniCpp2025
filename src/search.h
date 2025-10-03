@@ -26,6 +26,9 @@ constexpr int ASP_WINDOW = 50;
 constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
+// Margins for futility pruning at depths 1 and 2 respectively.
+constexpr std::array<int, 3> FUTILITY_MARGINS = {{0, 200, 500}};
+
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
     if (move_index <= N_PROTECTED_MOVES) {
@@ -414,6 +417,18 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return -MATE + ply;
     }
 
+    // --- Futility Pruning ---
+    // At low depths, if the static evaluation is significantly worse than alpha,
+    // it's unlikely a quiet move will improve the situation enough to beat alpha.
+    // We can therefore prune (skip searching) all quiet moves.
+    if (depth > 0 && depth < FUTILITY_MARGINS.size() && !is_mate(alpha)) {
+        int static_eval = evaluate(search_info.board);
+        if (static_eval + FUTILITY_MARGINS[depth] <= alpha) {
+            goto after_quiet_moves;
+        }
+    }
+
+
     score_moves(quiet_moves, search_info.board, k_moves, ply);
     std::sort(quiet_moves.begin(), quiet_moves.end());
     for (auto & move : quiet_moves) {
@@ -459,6 +474,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             }
         }
     }
+
+after_quiet_moves:;
 
     search_info.bestMove = std::move(best_move);
     if (!(ply == 0 && search_info.quit) && search_info.bestMove) {
