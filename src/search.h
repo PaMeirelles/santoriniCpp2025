@@ -27,9 +27,8 @@ constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
 constexpr int FUTILITY_PRUNING_MAX_DEPTH = 6;
-constexpr int FUTILITY_BASE_MARGIN = 180;
-constexpr int FUTILITY_DEPTH_MARGIN = 40;
-constexpr std::array<int, 3> FUTILITY_MARGINS = {{0, 200, 400}};
+constexpr int FUTILITY_BASE_MARGIN = 100;
+constexpr int FUTILITY_DEPTH_MARGIN = 300;
 
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
