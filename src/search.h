@@ -26,7 +26,9 @@ constexpr int ASP_WINDOW = 50;
 constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
-// Margins for futility pruning at depths 1 and 2 respectively.
+constexpr int FUTILITY_PRUNING_MAX_DEPTH = 6;
+constexpr int FUTILITY_BASE_MARGIN = 180;
+constexpr int FUTILITY_DEPTH_MARGIN = 40;
 constexpr std::array<int, 3> FUTILITY_MARGINS = {{0, 200, 400}};
 
 
@@ -383,10 +385,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         int curr_score;
         auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        // Initial reduced search
         curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
 
-        // If the reduced search fails high, and a reduction was actually applied, research at full depth
         if (reduction > 0 && curr_score > alpha) {
             curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
         }
@@ -417,24 +417,25 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return -MATE + ply;
     }
 
-    // --- Futility Pruning ---
-    if (depth < FUTILITY_MARGINS.size()) {
-        int static_eval = evaluate(search_info.board);
 
-        // Forward futility pruning
-        if (!is_mate(alpha) && static_eval + FUTILITY_MARGINS[depth] <= alpha) {
-            goto after_quiet_moves;
-        }
-
-        // Reverse futility pruning
-        if (!is_mate(beta) && static_eval - FUTILITY_MARGINS[depth] >= beta) {
-            return beta; // fail-high pruning
-        }
-    }
 
     score_moves(quiet_moves, search_info.board, k_moves, ply);
     std::sort(quiet_moves.begin(), quiet_moves.end());
+
+    int static_eval = 0;
+    const bool can_prune = depth < FUTILITY_PRUNING_MAX_DEPTH && !is_mate(alpha);
+    if (can_prune) {
+        static_eval = evaluate(search_info.board);
+    }
+
     for (auto & move : quiet_moves) {
+        if (can_prune) {
+            const int margin = FUTILITY_BASE_MARGIN + (FUTILITY_DEPTH_MARGIN * depth * depth);
+            if (static_eval + margin <= alpha) {
+                break; // Exit the quiet move loop
+            }
+        }
+
         move_count++;
         if (tt_move_opt.has_value() && move == *tt_move_opt) {
             continue;
@@ -449,10 +450,8 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         int curr_score;
         auto reduction = get_lmr_reduction(depth, move_count);
         search_info.board.make_move(move);
-        // Initial reduced search
         curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
 
-        // If the reduced search fails high, and a reduction was actually applied, research at full depth
         if (reduction > 0 && curr_score > alpha) {
             curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
         }
@@ -477,8 +476,6 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             }
         }
     }
-
-after_quiet_moves:;
 
     search_info.bestMove = std::move(best_move);
     if (!(ply == 0 && search_info.quit) && search_info.bestMove) {
