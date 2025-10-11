@@ -27,8 +27,8 @@ constexpr int MIN_DEPTH = 2;
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
 constexpr int FUTILITY_PRUNING_MAX_DEPTH = 6;
-constexpr int FUTILITY_BASE_MARGIN = 0;
-constexpr int FUTILITY_DEPTH_MARGIN = 200;
+constexpr int FUTILITY_BASE_MARGIN = -50;
+constexpr int FUTILITY_DEPTH_MARGIN = 250;
 
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
