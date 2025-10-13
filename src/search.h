@@ -36,7 +36,7 @@ constexpr int FUTILITY_BASE_MARGIN = -50;
 constexpr int FUTILITY_DEPTH_MARGIN = 250;
 
 constexpr int RAZOR_DEPTH = 4;
-constexpr int RAZOR_MARGIN = 150;
+constexpr int RAZOR_MARGIN = 175;
 
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
@@ -322,6 +322,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return eval;
     }
 
+    // razoring
     if (depth <= RAZOR_DEPTH && eval + RAZOR_MARGIN * depth < alpha) {
         auto qeval = qsearch(search_info, alpha, beta, k_moves, ply);
 
