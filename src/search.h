@@ -24,13 +24,19 @@ constexpr int MATE = 10000;
 constexpr int CHECK_EVERY = 4096;
 constexpr int ASP_WINDOW = 50;
 constexpr int MIN_DEPTH = 2;
+
 constexpr int RFP_DEPTH = 4;
 constexpr int RFP_MARGIN = 250;
+
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
+
 constexpr int FUTILITY_PRUNING_MAX_DEPTH = 6;
 constexpr int FUTILITY_BASE_MARGIN = -50;
 constexpr int FUTILITY_DEPTH_MARGIN = 250;
+
+constexpr int RAZOR_DEPTH = 4;
+constexpr int RAZOR_MARGIN = 150;
 
 
 inline int get_lmr_reduction(const int depth, const int move_index) {
@@ -314,6 +320,14 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     auto eval = evaluate(search_info.board);
     if (depth <= RFP_DEPTH && eval >= beta + RFP_MARGIN * depth) {
         return eval;
+    }
+
+    if (depth <= RAZOR_DEPTH && eval + RAZOR_MARGIN * depth < alpha) {
+        auto qeval = qsearch(search_info, alpha, beta, k_moves, ply);
+
+        if (qeval < alpha) {
+            return qeval;
+        }
     }
 
     // Null Move Pruning
