@@ -24,6 +24,8 @@ constexpr int MATE = 10000;
 constexpr int CHECK_EVERY = 4096;
 constexpr int ASP_WINDOW = 50;
 constexpr int MIN_DEPTH = 2;
+constexpr int RFP_DEPTH = 4;
+constexpr int RFP_MARGIN = 250;
 constexpr int N_PROTECTED_MOVES = 2;
 constexpr float LMR_FACTOR = 4;
 constexpr int FUTILITY_PRUNING_MAX_DEPTH = 6;
@@ -307,6 +309,11 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     }
     if (depth <= 0) {
         return qsearch(search_info, alpha, beta, k_moves, ply);
+    }
+    // reverse futility pruning
+    auto eval = evaluate(search_info.board);
+    if (depth <= RFP_DEPTH && eval >= beta + RFP_MARGIN * depth) {
+        return eval;
     }
 
     // Null Move Pruning
