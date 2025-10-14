@@ -36,7 +36,7 @@ constexpr int FUTILITY_BASE_MARGIN = -50;
 constexpr int FUTILITY_DEPTH_MARGIN = 250;
 
 constexpr int RAZOR_DEPTH = 4;
-constexpr int RAZOR_MARGIN = 175;
+constexpr int RAZOR_MARGIN = 225;
 
 
 inline int get_lmr_reduction(const int depth, const int move_index) {

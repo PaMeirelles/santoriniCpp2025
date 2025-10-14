@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_9.2.1_Prophet)
+project(Paladini_9.2.2_Prophet)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,11 +18,11 @@ add_library(
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_9.2.1_Prophet src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Paladini_9.2.2_Prophet src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_9.2.1_Prophet
+        Paladini_9.2.2_Prophet
         PRIVATE santorini_engine
 )
 
