@@ -13,55 +13,34 @@
 #include "transposition_table.h"
 #include "evaluation.h"
 #include "killer_moves.h"
+#include "search_params.h"
 
 
 namespace Santorini {
+    using sq_i = int8_t;
 
-// Use the correct type alias as defined in your constants/moves headers
-using sq_i = int8_t;
-
-constexpr int MATE = 10000;
-constexpr int CHECK_EVERY = 4096;
-constexpr int ASP_WINDOW = 50;
-constexpr int MIN_DEPTH = 2;
-
-constexpr int RFP_DEPTH = 4;
-constexpr int RFP_MARGIN = 250;
-
-constexpr int N_PROTECTED_MOVES = 2;
-constexpr float LMR_FACTOR = 4;
-
-constexpr int FUTILITY_PRUNING_MAX_DEPTH = 6;
-constexpr int FUTILITY_BASE_MARGIN = -50;
-constexpr int FUTILITY_DEPTH_MARGIN = 250;
-
-constexpr int RAZOR_DEPTH = 4;
-constexpr int RAZOR_MARGIN = 225;
+    constexpr int MATE = 10000;
+    constexpr int CHECK_EVERY = 4096;
 
 
-inline int get_lmr_reduction(const int depth, const int move_index) {
-    if (move_index <= N_PROTECTED_MOVES) {
-        return 0;
-    }
-    auto reduction = (log2(depth) * log2(move_index)) / LMR_FACTOR;
+    inline int get_lmr_reduction(const int depth, const int move_index, const SearchParams& params) {
+        if (move_index <= params.n_protected_moves) {
+            return 0;
+        }
+        auto reduction = (log2(depth) * log2(move_index)) / params.lmr_factor;
 
-    if (depth - reduction < MIN_DEPTH) {
-        reduction = depth - MIN_DEPTH;
+        if (depth - reduction < params.min_depth) {
+            reduction = depth - params.min_depth;
+        }
+
+        if (reduction < 0) return 0;
+
+        return static_cast<int>(reduction);
     }
 
-    if (reduction < 0) return 0;
-
-    return static_cast<int>(reduction);
-}
-
-
-inline int adaptive_null_reduction(int depth) {
-    if (depth >= 8) return 3;
-    if (depth >= 4) return 2;
-    return 1;
-}
-
-
+    inline int adaptive_null_reduction(int depth, const SearchParams& params) {
+        return static_cast<int>(log(depth) / params.nmp_factor);
+    }
 
 inline bool is_mate(int score) {
     return score > (MATE - 100) || score < (-MATE + 100);
@@ -249,9 +228,9 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
 }
 
 int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
-    KillerMoves& k_moves, bool allow_null = true);
+    KillerMoves& k_moves, const SearchParams& params, bool allow_null = true);
 
-inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply) {
+inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply, const SearchParams& params) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -289,7 +268,8 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         }
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1);
+        // Pass params down
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1, params);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
@@ -305,8 +285,8 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
     return alpha;
 }
 
-inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta,
-    TranspositionTable& tt, KillerMoves& k_moves, bool allow_null) {
+    inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta,
+        TranspositionTable& tt, KillerMoves& k_moves, const SearchParams& params, bool allow_null) {
     search_info.nodes++;
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
         search_info.quit = true;
@@ -314,29 +294,29 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         return 0;
     }
     if (depth <= 0) {
-        return qsearch(search_info, alpha, beta, k_moves, ply);
+        return qsearch(search_info, alpha, beta, k_moves, ply, params);
     }
-    // reverse futility pruning
+    // REVERSE FUTILITY PRUNING
     auto eval = evaluate(search_info.board);
-    if (depth <= RFP_DEPTH && eval >= beta + RFP_MARGIN * depth) {
+    if (depth <= params.rfp_depth && eval >= beta + params.rfp_margin * depth) {
         return eval;
     }
 
-    // razoring
-    if (depth <= RAZOR_DEPTH && eval + RAZOR_MARGIN * depth < alpha) {
-        auto qeval = qsearch(search_info, alpha, beta, k_moves, ply);
-
+    // RAZORING
+    if (depth <= params.razor_depth && eval + params.razor_margin * depth < alpha) {
+        auto qeval = qsearch(search_info, alpha, beta, k_moves, ply, params);
         if (qeval < alpha) {
             return qeval;
         }
     }
 
-    // Null Move Pruning
-    if (allow_null && depth >= adaptive_null_reduction(ply) + 1) {
+    // NULL MOVE PRUNING
+    int null_reduction = adaptive_null_reduction(ply, params);
+    if (allow_null && depth >= null_reduction + 1) {
         bool prevent_up = search_info.board.get_prevent_up_next_turn();
         search_info.board.make_null_move();
-        int score = -search(search_info, depth - 1 - adaptive_null_reduction(ply),
-                        ply + 1, -beta, -beta + 1, tt, k_moves, false);
+        int score = -search(search_info, depth - 1 - null_reduction,
+                        ply + 1, -beta, -beta + 1, tt, k_moves, params, false);
         search_info.board.unmake_null_move(prevent_up);
         if (score >= beta) {
             return beta;
@@ -362,7 +342,7 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
             }
 
             search_info.board.make_move(move);
-            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves, params);
             search_info.board.unmake_move(move);
 
             if (search_info.quit) {
@@ -404,14 +384,14 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
 
         int curr_score;
-        auto reduction = get_lmr_reduction(depth, move_count);
+        // LATE MOVE REDUCTION
+        int reduction = get_lmr_reduction(depth, move_count, params);
         search_info.board.make_move(move);
-        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
+        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves, params);
 
         if (reduction > 0 && curr_score > alpha) {
-            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves, params);
         }
-        search_info.board.unmake_move(move);
 
         if (search_info.quit) {
             search_info.bestMove = nullptr;
@@ -444,16 +424,17 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     std::sort(quiet_moves.begin(), quiet_moves.end());
 
     int static_eval = 0;
-    const bool can_prune = depth < FUTILITY_PRUNING_MAX_DEPTH && !is_mate(alpha);
+    // FUTILITY PRUNING
+    const bool can_prune = depth < params.futility_pruning_max_depth && !is_mate(alpha);
     if (can_prune) {
         static_eval = evaluate(search_info.board);
     }
 
     for (auto & move : quiet_moves) {
         if (can_prune) {
-            const int margin = FUTILITY_BASE_MARGIN + (FUTILITY_DEPTH_MARGIN * depth * depth);
+            const int margin = params.futility_base_margin + (params.futility_depth_margin * depth * depth);
             if (static_eval + margin <= alpha) {
-                break; // Exit the quiet move loop
+                break;
             }
         }
 
@@ -469,12 +450,12 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
         }
 
         int curr_score;
-        auto reduction = get_lmr_reduction(depth, move_count);
+        int reduction = get_lmr_reduction(depth, move_count, params);
         search_info.board.make_move(move);
-        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
+        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves, params);
 
         if (reduction > 0 && curr_score > alpha) {
-            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
+            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves, params);
         }
         search_info.board.unmake_move(move);
 
@@ -510,29 +491,32 @@ inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int be
     return max_score;
 }
 
-inline SearchResult get_best_move(
-    Board& board,
-    int remaining_time_ms,
-    TranspositionTable& tt,
-    std::optional<int> max_depth = std::nullopt)
+    inline SearchResult get_best_move(
+        Board& board,
+        int remaining_time_ms,
+        TranspositionTable& tt,
+        const SearchParams& params, // Pass params struct
+        std::optional<int> max_depth = std::nullopt)
 {
     auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 10);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int prev_score = 0;
-    long nodes_searched = 0; // To store nodes from last completed iteration
+    long nodes_searched = 0;
     KillerMoves killers;
 
     for (int depth = 1; ; ++depth) {
         killers.clear();
-        int alpha = std::max(-MATE, prev_score - ASP_WINDOW);
-        int beta = std::min(MATE, prev_score + ASP_WINDOW);
+        // ASPIRATION WINDOW
+        int alpha = std::max(-MATE, prev_score - params.asp_window);
+        int beta = std::min(MATE, prev_score + params.asp_window);
 
-        SearchInfo si(board, depth, end_time); // Moved outside the while loop
+        SearchInfo si(board, depth, end_time);
 
         while (true) {
-            int score = search(si, depth, 0, alpha, beta, tt, killers);
+            // Pass params to the search
+            int score = search(si, depth, 0, alpha, beta, tt, killers, params);
 
             if (si.quit) {
                 SearchResult result;
@@ -554,22 +538,6 @@ inline SearchResult get_best_move(
             }
             prev_score = score;
             break;
-        }
-
-        nodes_searched = si.nodes; // Update nodes count after a successful depth search
-
-        auto [pv_move_ptr, pv_score_opt] = tt.probe_pv_move(board);
-        if (pv_move_ptr != nullptr) {
-            best_move =  std::make_unique<Moves::Move>(*pv_move_ptr);
-            if(pv_score_opt.has_value()) prev_score = *pv_score_opt;
-        }
-
-        if (is_mate(prev_score) || (max_depth.has_value() && depth >= *max_depth) || depth >= 100) {
-            SearchResult result;
-            result.best_move = std::move(best_move);
-            result.score = prev_score;
-            result.nodes = nodes_searched;
-            return result;
         }
     }
 }
