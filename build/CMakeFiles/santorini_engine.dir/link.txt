@@ -1,0 +1,2 @@
+/usr/bin/ar qc libsantorini_engine.a CMakeFiles/santorini_engine.dir/src/board.cpp.o CMakeFiles/santorini_engine.dir/src/moves.cpp.o
+/usr/bin/ranlib libsantorini_engine.a

@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/rafaelmeirelles/santoriniCpp2025/build/cmake_install.cmake",
+		"/home/rafaelmeirelles/santoriniCpp2025/build/extern/googletest/cmake_install.cmake",
+		"/home/rafaelmeirelles/santoriniCpp2025/build/extern/googletest/googlemock/cmake_install.cmake",
+		"/home/rafaelmeirelles/santoriniCpp2025/build/extern/googletest/googletest/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
