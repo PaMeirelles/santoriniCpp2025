@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/Paladini_8.1.8_Firefly.dir/src/main.cpp.o CMakeFiles/Paladini_8.1.8_Firefly.dir/src/board.cpp.o CMakeFiles/Paladini_8.1.8_Firefly.dir/src/moves.cpp.o -o Paladini_8.1.8_Firefly  libsantorini_engine.a
