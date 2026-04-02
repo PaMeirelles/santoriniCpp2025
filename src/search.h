@@ -1,19 +1,15 @@
 #pragma once
 
-#include <iostream>
 #include <vector>
 #include <memory>
 #include <chrono>
 #include <algorithm>
-#include <set>
 #include <cmath>
+#include <random>
 
 #include "board.h"
 #include "moves.h"
-#include "transposition_table.h"
 #include "evaluation.h"
-#include "killer_moves.h"
-
 
 namespace Santorini {
 
@@ -22,34 +18,6 @@ using sq_i = int8_t;
 
 constexpr int MATE = 10000;
 constexpr int CHECK_EVERY = 4096;
-constexpr int ASP_WINDOW = 50;
-constexpr int MIN_DEPTH = 2;
-constexpr int N_PROTECTED_MOVES = 2;
-constexpr float LMR_FACTOR = 4;
-
-inline int get_lmr_reduction(const int depth, const int move_index) {
-    if (move_index <= N_PROTECTED_MOVES) {
-        return 0;
-    }
-    auto reduction = (log2(depth) * log2(move_index)) / LMR_FACTOR;
-
-    if (depth - reduction < MIN_DEPTH) {
-        reduction = depth - MIN_DEPTH;
-    }
-
-    if (reduction < 0) return 0;
-
-    return static_cast<int>(reduction);
-}
-
-
-inline int adaptive_null_reduction(int depth) {
-    if (depth >= 8) return 3;
-    if (depth >= 4) return 2;
-    return 1;
-}
-
-
 
 inline bool is_mate(int score) {
     return score > (MATE - 100) || score < (-MATE + 100);
@@ -61,478 +29,190 @@ struct SearchResult {
     long nodes = 0;
 };
 
-struct SearchInfo {
-    Board& board;
-    int depth;
-    std::chrono::time_point<std::chrono::high_resolution_clock> end_time;
-    long nodes = 0;
-    bool quit = false;
-    std::unique_ptr<Moves::Move> bestMove = nullptr;
-
-    SearchInfo(Board& b, int d, std::chrono::time_point<std::chrono::high_resolution_clock> et)
-        : board(b), depth(d), end_time(et) {}
-};
-
 inline int evaluate(const Board& board) {
     return score_position(board) * board.get_turn();
 }
 
-constexpr std::array<std::array<int, 4>, 4> HEIGHT_SCORING =
-    {{
-        {
-            {0, 1, 3, 0}
-        },
-        {
-            {-1, 0, 2, 4}
-        },
-        {
-            {-2, -1, 0, 4}
-        },
-        {
-            {-1, 0, 2, 0}
-        }
-    }};
+// =========================================================================================
+// MCTS IMPLEMENTATION
+// =========================================================================================
 
-constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_SINGLE =
-    {{
-        {
-            {8, -8, 0, 0}
-        },
-        {
-            {2, 16, -16, 0}
-        },
-        {
-            {0, 4, 32, -32}
-        },
-        {
-            {0, 16, -16, -2}
-        }
-    }};
+struct MCTSNode {
+    std::unique_ptr<Moves::Move> move;
+    MCTSNode* parent;
+    std::vector<std::unique_ptr<MCTSNode>> children;
+    std::vector<Moves::Move> untried_moves;
 
-constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOUBLE =
-    {{
-        {
-            {0, 0, 0, 0}
-        },
-        {
-            {16, -2, -16, 0}
-        },
-        {
-            {2, 32, -2, 0}
-        },
-        {
-            {2, 0, -4, 0}
-        }
-    }};
+    int visits = 0;
+    double score = 0.0;
+    int player_to_move; // The ID of the player to move AT THIS state
 
-constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOME =
-    {{
-        {
-            {0, 0, 0, 0}
-        },
-        {
-            {0, -2, -16, 0}
-        },
-        {
-            {0, 0, -2, -32}
-        },
-        {
-            {0, 0, -4, 0}
-        }
-    }};
+    MCTSNode(std::unique_ptr<Moves::Move> m, MCTSNode* p, Board& b)
+        : move(std::move(m)), parent(p), player_to_move(b.get_turn()) {
 
+        auto climbers = b.generate_climber_moves();
+        auto quiets = b.generate_quiet_moves();
 
-inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
-    auto k1 = k_moves.killers[ply][0];
-    auto k2 = k_moves.killers[ply][1];
-    auto k3 = k_moves.killers[ply][2];
-    auto current_god = board.get_current_god();
-    for (auto& mv : moves) {
-        // Pan's winning move should be scored highly, then we continue to the next move.
-        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
-            mv.score = 1000000;
-            return;
-        }
-        // --- Killer Move Heuristic (unchanged) ---
-        if (k1.has_value() && *k1==mv) {
-            mv.score = 900000;
-            continue;
-        }
-        if (k2.has_value() && *k2==mv) {
-            mv.score = 800000;
-            continue;
-        }
-        if (k3.has_value() && *k3==mv) {
-            mv.score = 700000;
-            continue;
-        }
+        untried_moves.reserve(climbers.size() + quiets.size());
+        untried_moves.insert(untried_moves.end(), climbers.begin(), climbers.end());
+        untried_moves.insert(untried_moves.end(), quiets.begin(), quiets.end());
+    }
 
-        sq_i ally, enemy_1, enemy_2;
+    bool is_fully_expanded() const {
+        return untried_moves.empty();
+    }
 
-        switch (board.get_workers_map()[mv.from_sq]) {
-            case 0: ally = 1; enemy_1 = 2; enemy_2 = 3; break;
-            case 1: ally = 0; enemy_1 = 2; enemy_2 = 3; break;
-            case 2: ally = 3; enemy_1 = 0; enemy_2 = 1; break;
-            case 3: ally = 2; enemy_1 = 0; enemy_2 = 1; break;
-            default: throw std::invalid_argument("Invalid move");
-        }
+    bool is_terminal() const {
+        return is_fully_expanded() && children.empty();
+    }
 
-        // --- Block Scoring Logic (REVISED) ---
-        int current_block_score = 0;
-        sq_i worker_height = board.get_blocks()[mv.to_sq];
+    MCTSNode* get_best_uct_child(double exploration_param = 1.414) const {
+        MCTSNode* best_child = nullptr;
+        double best_uct = -std::numeric_limits<double>::max();
 
-        // Helper lambda to score a single build action based on a given scoring matrix
-        auto score_a_build = [&](sq_i build_sq, const auto& matrix) {
-            int score = 0;
-            sq_i build_loc_height = board.get_blocks()[build_sq];
-            score += matrix[worker_height][build_loc_height];
-            if (adj_ok(board.get_workers()[ally], build_sq)) {
-                score += matrix[board.get_blocks()[board.get_workers()[ally]]][build_loc_height];
+        for (const auto& child : children) {
+            if (child->visits == 0) continue;
+
+            // Score represents wins from the perspective of the player making the decision
+            // (the player_to_move of the current node).
+            double win_rate = child->score / child->visits;
+            double uct = win_rate + exploration_param * std::sqrt(std::log(visits) / child->visits);
+
+            if (uct > best_uct) {
+                best_uct = uct;
+                best_child = child.get();
             }
-            if (adj_ok(board.get_workers()[enemy_1], build_sq)) {
-                score -= matrix[board.get_blocks()[board.get_workers()[enemy_1]]][build_loc_height];
-            }
-            if (adj_ok(board.get_workers()[enemy_2], build_sq)) {
-                score -= matrix[board.get_blocks()[board.get_workers()[enemy_2]]][build_loc_height];
-            }
-            return score;
-        };
+        }
+        return best_child;
+    }
+};
 
-        // If the extra build is on the same square, use the double scoring matrix for the whole action.
-        if (mv.extra_build_sq.has_value() && mv.extra_build_sq.value() == mv.build_sq) {
-            current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOUBLE);
-        } else {
-            if (mv.dome) {
-                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_DOME);
-            }
-            else {
-                current_block_score = score_a_build(mv.build_sq, BLOCK_SCORING_SINGLE);
-            }
-            if (mv.extra_build_sq.has_value()) {
-                current_block_score += score_a_build(mv.extra_build_sq.value(), BLOCK_SCORING_SINGLE);
+// Pure random rollout simulation
+inline int simulate(Board board) {
+    static thread_local std::mt19937 rng(std::random_device{}());
+    int depth = 0;
+    const int MAX_ROLLOUT_DEPTH = 50;
+
+    while (depth < MAX_ROLLOUT_DEPTH) {
+        auto climbers = board.generate_climber_moves();
+        for (const auto& m : climbers) {
+            if (m.winning) {
+                return board.get_turn(); // The player who just moved wins
             }
         }
 
-        // --- Final Score Calculation ---
-        const sq_i from_h = board.get_blocks()[mv.from_sq];
-        const sq_i to_h = board.get_blocks()[mv.to_sq];
-        mv.score = HEIGHT_SCORING[from_h][to_h] * 800 +
-            current_block_score * 10 +
-            (Constants::DOUBLE_NEIGHBORS[mv.to_sq] - Constants::DOUBLE_NEIGHBORS[mv.from_sq]);
-    }
-}
-
-inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
-    size_t best_idx = start_index;
-    int best_score = moves[best_idx].score;
-    for (size_t i = start_index + 1; i < moves.size(); ++i) {
-        if (moves[i].score > best_score) {
-            best_idx = i;
-            best_score = moves[i].score;
-        }
-    }
-    if (best_idx != start_index) {
-        std::swap(moves[start_index], moves[best_idx]);
-    }
-}
-
-int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
-    KillerMoves& k_moves, bool allow_null = true);
-
-inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply) {
-    search_info.nodes++;
-
-    if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
-        search_info.quit = true;
-        return 0;
-    }
-    int stand_pat = evaluate(search_info.board);
-    if (stand_pat >= beta) {
-        return beta;
-    }
-    if (stand_pat > alpha) {
-        alpha = stand_pat;
-    }
-
-    auto climber_moves = search_info.board.generate_climber_moves();
-
-    if (climber_moves.empty()) {
-        return stand_pat;
-    }
-
-    for (const auto& move : climber_moves) {
-        if (move.winning) {
-            return MATE - ply;
-        }
-    }
-
-    bool visited_to_sq[25] = {false};
-    score_moves(climber_moves, search_info.board, k_moves, ply);
-
-    for (size_t i = 0; i < climber_moves.size(); ++i) {
-        pick_move(climber_moves, i);
-        auto& move = climber_moves[i];
-        if (visited_to_sq[move.to_sq]) {
-            continue;
-        }
-        search_info.board.make_move(move);
-        visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1);
-        search_info.board.unmake_move(move);
-
-        if (search_info.quit) return 0;
-
-        if (score >= beta) {
-            return beta;
-        }
-        if (score > alpha) {
-            alpha = score;
-        }
-    }
-
-    return alpha;
-}
-
-inline int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta,
-    TranspositionTable& tt, KillerMoves& k_moves, bool allow_null) {
-    search_info.nodes++;
-    if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
-        search_info.quit = true;
-        search_info.bestMove = nullptr;
-        return 0;
-    }
-    if (depth <= 0) {
-        return qsearch(search_info, alpha, beta, k_moves, ply);
-    }
-
-    // Null Move Pruning
-    if (allow_null && depth >= adaptive_null_reduction(ply) + 1) {
-        bool prevent_up = search_info.board.get_prevent_up_next_turn();
-        search_info.board.make_null_move();
-        int score = -search(search_info, depth - 1 - adaptive_null_reduction(ply),
-                        ply + 1, -beta, -beta + 1, tt, k_moves, false);
-        search_info.board.unmake_null_move(prevent_up);
-        if (score >= beta) {
-            return beta;
-        }
-    }
-    std::optional<Moves::Move> tt_move_opt;
-    std::optional<int> tt_score_opt;
-    if (tt.probe(search_info.board, alpha, beta, depth, &tt_move_opt, &tt_score_opt)) {
-        return *tt_score_opt;
-    }
-
-    int max_score = -MATE * 100;
-    std::unique_ptr<Moves::Move> best_move = nullptr;
-    int original_alpha = alpha;
-
-    if (tt_move_opt.has_value()) {
-        const Moves::Move& move = *tt_move_opt;
-        if (search_info.board.is_valid_move(move)) {
-            if (move.winning) {
-                tt.store(search_info.board, move, MATE - ply, depth, 'E');
-                search_info.bestMove = std::make_unique<Moves::Move>(move);
-                return MATE - ply;
-            }
-
-            search_info.board.make_move(move);
-            int curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
-            search_info.board.unmake_move(move);
-
-            if (search_info.quit) {
-                search_info.bestMove = nullptr;
-                return 0;
-            }
-
-            if (curr_score > max_score) {
-                max_score = curr_score;
-                best_move = std::make_unique<Moves::Move>(move);
-                if (max_score > alpha) {
-                    if (max_score >= beta) {
-                        search_info.bestMove = std::move(best_move);
-                        tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-                        return beta;
-                    }
-                    alpha = max_score;
-                }
-            }
-        }
-    }
-    int move_count = 0;
-    auto climber_moves = search_info.board.generate_climber_moves();
-    score_moves(climber_moves, search_info.board, k_moves, ply);
-
-    for (size_t i = 0; i < climber_moves.size(); ++i) {
-        move_count++;
-        pick_move(climber_moves, i);
-        auto& move = climber_moves[i];
-
-        if (tt_move_opt.has_value() && move == *tt_move_opt) {
-            continue;
+        auto quiets = board.generate_quiet_moves();
+        if (climbers.empty() && quiets.empty()) {
+            return -board.get_turn(); // No moves left, current player loses
         }
 
-        if (move.winning) {
-            tt.store(search_info.board, move, MATE - ply, depth, 'E');
-            search_info.bestMove = std::make_unique<Moves::Move>(move);
-            return MATE - ply;
-        }
+        std::vector<Moves::Move> all_moves;
+        all_moves.reserve(climbers.size() + quiets.size());
+        all_moves.insert(all_moves.end(), climbers.begin(), climbers.end());
+        all_moves.insert(all_moves.end(), quiets.begin(), quiets.end());
 
-        int curr_score;
-        auto reduction = get_lmr_reduction(depth, move_count);
-        search_info.board.make_move(move);
-        // Initial reduced search
-        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
-
-        // If the reduced search fails high, and a reduction was actually applied, research at full depth
-        if (reduction > 0 && curr_score > alpha) {
-            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
-        }
-        search_info.board.unmake_move(move);
-
-        if (search_info.quit) {
-            search_info.bestMove = nullptr;
-            return 0;
-        }
-
-        if (curr_score > max_score) {
-            max_score = curr_score;
-            best_move = std::make_unique<Moves::Move>(move);
-            if (max_score > alpha) {
-                if (max_score >= beta) {
-                    search_info.bestMove = std::move(best_move);
-                    tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-                    return beta;
-                }
-                alpha = max_score;
-            }
-        }
+        std::uniform_int_distribution<size_t> dist(0, all_moves.size() - 1);
+        board.make_move(all_moves[dist(rng)]);
+        depth++;
     }
 
-    auto quiet_moves = search_info.board.generate_quiet_moves();
-
-    if (best_move == nullptr && climber_moves.empty() && quiet_moves.empty()) {
-        return -MATE + ply;
-    }
-
-    score_moves(quiet_moves, search_info.board, k_moves, ply);
-    std::sort(quiet_moves.begin(), quiet_moves.end());
-    for (auto & move : quiet_moves) {
-        move_count++;
-        if (tt_move_opt.has_value() && move == *tt_move_opt) {
-            continue;
-        }
-        if (move.winning) {
-            tt.store(search_info.board, move, MATE - ply, depth, 'E');
-            k_moves.add(ply, move);
-            search_info.bestMove = std::make_unique<Moves::Move>(move);
-            return MATE - ply;
-        }
-
-        int curr_score;
-        auto reduction = get_lmr_reduction(depth, move_count);
-        search_info.board.make_move(move);
-        // Initial reduced search
-        curr_score = -search(search_info, depth - 1 - reduction, ply + 1, -beta, -alpha, tt, k_moves);
-
-        // If the reduced search fails high, and a reduction was actually applied, research at full depth
-        if (reduction > 0 && curr_score > alpha) {
-            curr_score = -search(search_info, depth - 1, ply + 1, -beta, -alpha, tt, k_moves);
-        }
-        search_info.board.unmake_move(move);
-
-        if (search_info.quit) {
-            search_info.bestMove = nullptr;
-            return 0;
-        }
-
-        if (curr_score > max_score) {
-            max_score = curr_score;
-            best_move = std::make_unique<Moves::Move>(move);
-            if (max_score > alpha) {
-                if (max_score >= beta) {
-                    k_moves.add(ply, move);
-                    search_info.bestMove = std::move(best_move);
-                    tt.store(search_info.board, *search_info.bestMove, beta, depth, 'B');
-                    return beta;
-                }
-                alpha = max_score;
-            }
-        }
-    }
-
-    search_info.bestMove = std::move(best_move);
-    if (!(ply == 0 && search_info.quit) && search_info.bestMove) {
-        if (alpha != original_alpha) {
-            tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'E');
-        } else {
-            tt.store(search_info.board, *search_info.bestMove, max_score, depth, 'A');
-        }
-    }
-
-    return max_score;
+    // Depth limit reached, use heuristic evaluation to pick a winner
+    int eval = evaluate(board); // positive means current player is better off
+    if (eval > 0) return board.get_turn();
+    if (eval < 0) return -board.get_turn();
+    return 0; // Draw
 }
 
 inline SearchResult get_best_move(
     Board& board,
     int remaining_time_ms,
-    TranspositionTable& tt,
     std::optional<int> max_depth = std::nullopt)
 {
+    // max_depth is repurposed here as a max_iterations scalar if provided
+    long max_iterations = max_depth.has_value() ? static_cast<long>(max_depth.value()) * 1000 : std::numeric_limits<long>::max();
+
+    auto start_time = std::chrono::high_resolution_clock::now();
     auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 10);
-    auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
+    auto end_time = start_time + thinking_time;
 
-    std::unique_ptr<Moves::Move> best_move = nullptr;
-    int prev_score = 0;
-    long nodes_searched = 0; // To store nodes from last completed iteration
-    KillerMoves killers;
+    static thread_local std::mt19937 rng(std::random_device{}());
 
-    for (int depth = 1; ; ++depth) {
-        killers.clear();
-        int alpha = std::max(-MATE, prev_score - ASP_WINDOW);
-        int beta = std::min(MATE, prev_score + ASP_WINDOW);
+    MCTSNode root(nullptr, nullptr, board);
+    long nodes_searched = 0;
 
-        SearchInfo si(board, depth, end_time); // Moved outside the while loop
+    while (std::chrono::high_resolution_clock::now() < end_time && nodes_searched < max_iterations) {
+        MCTSNode* node = &root;
+        Board sim_board = board;
 
-        while (true) {
-            int score = search(si, depth, 0, alpha, beta, tt, killers);
-
-            if (si.quit) {
-                SearchResult result;
-                result.best_move = std::move(best_move);
-                result.score = prev_score;
-                result.nodes = nodes_searched;
-                return result;
-            }
-
-            if (score <= alpha) {
-                if (alpha == -MATE) break;
-                alpha = -MATE;
-                continue;
-            }
-            if (score >= beta) {
-                if (beta == MATE) break;
-                beta = MATE;
-                continue;
-            }
-            prev_score = score;
-            break;
+        // 1. Selection
+        while (node->is_fully_expanded() && !node->is_terminal()) {
+            node = node->get_best_uct_child();
+            sim_board.make_move(*(node->move));
         }
 
-        nodes_searched = si.nodes; // Update nodes count after a successful depth search
+        // 2. Expansion
+        if (!node->is_fully_expanded()) {
+            std::uniform_int_distribution<size_t> dist(0, node->untried_moves.size() - 1);
+            size_t move_idx = dist(rng);
+            auto move_to_try = node->untried_moves[move_idx];
 
-        auto [pv_move_ptr, pv_score_opt] = tt.probe_pv_move(board);
-        if (pv_move_ptr != nullptr) {
-            best_move =  std::make_unique<Moves::Move>(*pv_move_ptr);
-            if(pv_score_opt.has_value()) prev_score = *pv_score_opt;
+            // Fast pop-and-swap to remove the selected move
+            node->untried_moves[move_idx] = node->untried_moves.back();
+            node->untried_moves.pop_back();
+
+            sim_board.make_move(move_to_try);
+            auto new_node = std::make_unique<MCTSNode>(std::make_unique<Moves::Move>(move_to_try), node, sim_board);
+            node->children.push_back(std::move(new_node));
+            node = node->children.back().get();
         }
 
-        if (is_mate(prev_score) || (max_depth.has_value() && depth >= *max_depth) || depth >= 100) {
-            SearchResult result;
-            result.best_move = std::move(best_move);
-            result.score = prev_score;
-            result.nodes = nodes_searched;
-            return result;
+        // 3. Simulation
+        // Returns absolute turn ID of the winning player (e.g. 1 or -1)
+        int absolute_winner = simulate(sim_board);
+
+        // 4. Backpropagation
+        while (node != nullptr) {
+            node->visits++;
+            if (node->parent != nullptr) {
+                // The player who made the decision to arrive at THIS node was the parent
+                int parent_player = node->parent->player_to_move;
+                if (absolute_winner == parent_player) {
+                    node->score += 1.0;
+                } else if (absolute_winner == 0) {
+                    node->score += 0.5; // Draw
+                }
+            }
+            node = node->parent;
+        }
+        nodes_searched++;
+    }
+
+    // Wrap up results
+    SearchResult result;
+    result.nodes = nodes_searched;
+
+    if (!root.children.empty()) {
+        MCTSNode* best_child = nullptr;
+        int max_visits = -1;
+
+        // Choose the root child with the highest visit count (standard for robust MCTS)
+        for (const auto& child : root.children) {
+            if (child->visits > max_visits) {
+                max_visits = child->visits;
+                best_child = child.get();
+            }
+        }
+
+        if (best_child) {
+            result.best_move = std::make_unique<Moves::Move>(*(best_child->move));
+
+            // Map the win rate [0.0 to 1.0] back to an Alpha-Beta style score [-MATE to MATE]
+            double win_rate = best_child->score / best_child->visits;
+            result.score = static_cast<int>((win_rate * 2.0 - 1.0) * MATE);
         }
     }
+
+    return result;
 }
+
 } // namespace Santorini

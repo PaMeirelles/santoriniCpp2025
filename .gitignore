@@ -1,0 +1,10 @@
+# Ignore all build directories
+cmake-build-*/
+CMakeFiles/
+*.obj
+*.exe
+*.lib
+*.pdb
+
+# Ignore LibTorch
+extern/libtorch/

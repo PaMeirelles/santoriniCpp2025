@@ -1665,7 +1665,6 @@ std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
 }
 
 
-
   bool operator < (const Board & lhs,
     const Board & rhs) {
 

@@ -1,40 +1,48 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_8.1.8_Firefly)
+project(Davi_1.0_Phoenix)
 
 set(CMAKE_CXX_STANDARD 20)
 
 # ############################################################################
+# # DEPENDENCIES
+# ############################################################################
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/extern/libtorch/share/cmake/Caffe2")
+find_package(Torch REQUIRED)
+
+# ############################################################################
 # # ENGINE LIBRARY
-# # Create a library that contains all the core engine logic.
-# # Both the main executable and the tests will use this.
 # ############################################################################
 add_library(
         santorini_engine
         src/board.cpp
         src/moves.cpp
+) #
+
+# Link LibTorch to the engine.
+# Using PUBLIC ensures that anything linking to santorini_engine
+# (like your main app and tests) also gets the Torch headers/libs.
+target_link_libraries(
+        santorini_engine
+        PUBLIC "${TORCH_LIBRARIES}"
 )
 
 # ############################################################################
 # # MAIN EXECUTABLE
-# # This is your main application.
 # ############################################################################
-add_executable(Paladini_8.1.8_Firefly src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Davi_1.0_Phoenix src/main.cpp src/board.cpp src/moves.cpp) # 
 
-# Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_8.1.8_Firefly
+        Davi_1.0_Phoenix
         PRIVATE santorini_engine
-)
+) 
 
 # ############################################################################
 # # TESTING
 # ############################################################################
 enable_testing()
 
-# Add the googletest subdirectory (assuming it's in extern/googletest)
 add_subdirectory(extern/googletest)
 
-# Create an executable for your tests.
 add_executable(
         run_tests
         tests/test_parsing.cpp
@@ -48,23 +56,38 @@ add_executable(
         tests/godSpecific/test_demeter.cpp
         tests/godSpecific/test_hephaestus.cpp
         tests/godSpecific/test_hermes.cpp
-        tests/godSpecific/test_minotaur.cpp
+        tests/godSpecific/test_minotaur.cpp # 
         tests/godSpecific/test_pan.cpp
         tests/godSpecific/test_prometheus.cpp
         tests/test_unmake_move_tests.cpp
         tests/test_transposition_table.cpp
         tests/test_evaluation.cpp
         tests/test_climber_quiet.cpp
-)
+) 
 
-# Link the test executable against both gtest and your engine library.
 target_link_libraries(
         run_tests
         PRIVATE
         gtest_main
         santorini_engine
+) 
+
+include(GoogleTest)
+
+gtest_discover_tests(run_tests)
+
+# Get the list of all DLLs in the libtorch/lib directory
+file(GLOB TORCH_DLLS "${CMAKE_PREFIX_PATH}/lib/*.dll")
+
+# Copy them to the directory where the executable is built
+add_custom_command(TARGET Davi_1.0_Phoenix POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${TORCH_DLLS}
+        $<TARGET_FILE_DIR:Davi_1.0_Phoenix>
 )
 
-# Discover and add the tests to the CTest runner.
-include(GoogleTest)
-gtest_discover_tests(run_tests)
+add_custom_command(TARGET Davi_1.0_Phoenix POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/models/santorini_evaluator.pt"
+        $<TARGET_FILE_DIR:Davi_1.0_Phoenix>
+)
