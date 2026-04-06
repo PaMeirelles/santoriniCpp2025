@@ -1,1675 +1,481 @@
 #include "board.h"
-
 #include <stdexcept>
-
 #include <algorithm>
-
 #include <vector>
-
 #include <deque>
 #include <iostream>
-
 #include <set>
-
 
 namespace Santorini {
 
-  // ############################################################################
+// ############################################################################
+// # Constructor and Parser
+// ############################################################################
 
-  // # Constructor and Parser
-
-  // ############################################################################
-
-  Board::Board(const std::string & position) {
-
+Board::Board(const std::string &position) {
     _parse_position(position);
 
+    // Check if the starting player is Prometheus to set the correct initial phase
+    _current_phase = 0;
     _hash = _calculate_full_hash();
+}
 
-  }
-
-  void Board::_parse_position(const std::string & position) {
-
+void Board::_parse_position(const std::string &position) {
     if (position.length() != 54) {
-
-      throw std::invalid_argument("Invalid position: Expected length 54, got " + std::to_string(position.length()));
-
+        throw std::invalid_argument("Invalid position: Expected length 54, got " + std::to_string(position.length()));
     }
 
     int num_gray_workers = 0;
-
     int num_blue_workers = 0;
 
     for (int i = 0; i < 25; ++i) {
+        int height = position[2 * i] - '0';
+        if (height < 0 || height > 4) throw std::invalid_argument("Invalid block height");
+        _blocks[i] = height;
 
-      int height = position[2 * i] - '0';
-
-      if (height < 0 || height > 4) throw std::invalid_argument("Invalid block height");
-
-      _blocks[i] = height;
-
-      char worker_code = position[2 * i + 1];
-
-      if (worker_code == 'G') {
-
-        if (num_gray_workers >= 2) throw std::invalid_argument("More than 2 gray workers");
-
-        _workers[num_gray_workers++] = i;
-
-      } else if (worker_code == 'B') {
-
-        if (num_blue_workers >= 2) throw std::invalid_argument("More than 2 blue workers");
-
-        _workers[2 + num_blue_workers++] = i;
-
-      } else if (worker_code != 'N') {
-
-        throw std::invalid_argument("Invalid worker code");
-
-      }
-
+        char worker_code = position[2 * i + 1];
+        if (worker_code == 'G') {
+            if (num_gray_workers >= 2) throw std::invalid_argument("More than 2 gray workers");
+            _workers[num_gray_workers++] = i;
+        } else if (worker_code == 'B') {
+            if (num_blue_workers >= 2) throw std::invalid_argument("More than 2 blue workers");
+            _workers[2 + num_blue_workers++] = i;
+        } else if (worker_code != 'N') {
+            throw std::invalid_argument("Invalid worker code");
+        }
     }
 
     if (num_gray_workers != 2 || num_blue_workers != 2) {
-
-      throw std::invalid_argument("Invalid worker count");
-
+        throw std::invalid_argument("Invalid worker count");
     }
 
     if (position[50] == '0') _turn = 1;
-
     else if (position[50] == '1') _turn = -1;
-
     else throw std::invalid_argument("Invalid turn character");
 
     int god1_val = position[51] - '0';
-
     int god2_val = position[52] - '0';
-
     if (god1_val < 0 || god1_val > 9 || god2_val < 0 || god2_val > 9) {
-
-      throw std::invalid_argument("Invalid god ID");
-
+        throw std::invalid_argument("Invalid god ID");
     }
 
-    _gods[0] = static_cast < Constants::God > (god1_val);
-
-    _gods[1] = static_cast < Constants::God > (god2_val);
-
+    _gods[0] = static_cast<Constants::God>(god1_val);
+    _gods[1] = static_cast<Constants::God>(god2_val);
     _prevent_up_next_turn = (position[53] == '1');
 
     _workers_map.fill(-1);
-    for (int i=0; i < 4; i++) {
-      _workers_map[_workers[i]] = i;
+    for (int i = 0; i < 4; i++) {
+        _workers_map[_workers[i]] = i;
     }
+}
 
-  }
-
-  std::string Board::to_text() const {
-
+std::string Board::to_text() const {
     std::string pos_str;
-
     pos_str.reserve(54);
-
-    std::array < char, 25 > worker_map {};
-
+    std::array<char, 25> worker_map{};
     worker_map.fill('N');
-
     worker_map[_workers[0]] = 'G';
-
     worker_map[_workers[1]] = 'G';
-
     worker_map[_workers[2]] = 'B';
-
     worker_map[_workers[3]] = 'B';
 
     for (int i = 0; i < 25; ++i) {
-
-      pos_str += std::to_string(_blocks[i]);
-
-      pos_str += worker_map[i];
-
+        pos_str += std::to_string(_blocks[i]);
+        pos_str += worker_map[i];
     }
-
     pos_str += (_turn == 1 ? '0' : '1');
-
-    pos_str += std::to_string(static_cast < int > (_gods[0]));
-
-    pos_str += std::to_string(static_cast < int > (_gods[1]));
-
+    pos_str += std::to_string(static_cast<int>(_gods[0]));
+    pos_str += std::to_string(static_cast<int>(_gods[1]));
     pos_str += (_prevent_up_next_turn ? '1' : '0');
-
     return pos_str;
+}
 
-  }
-
-  bool Board::_sanity_check_workers() const {
-    for (int i=0; i < 4; i++) {
-      if (_workers_map[_workers[i]] != i) return false;
+bool Board::_sanity_check_workers() const {
+    for (int i = 0; i < 4; i++) {
+        if (_workers_map[_workers[i]] != i) return false;
     }
     auto counter = 0;
-    for (int i=0; i < 25; i++) {
-      counter += _workers_map[i];
+    for (int i = 0; i < 25; i++) {
+        counter += _workers_map[i];
     }
     if (counter != -15) return false;
     return true;
-  }
+}
 
-  // ############################################################################
 
-  // # Public Methods
+// ############################################################################
+// # State Machine Logic
+// ############################################################################
 
-  // ############################################################################
-
-  void Board::make_move(const Moves::Move & move) {
-
-    _last_move_height_diff = 0;
-
-    _won = (_blocks[move.from_sq] < 3 && _blocks[move.to_sq] == 3);
-
-    _execute_god_move(move);
-
+void Board::make_action(int action_idx) {
     int current_player_idx = (_turn == 1) ? 0 : 1;
-
-    if (_gods[current_player_idx] == Constants::God::ATHENA && _last_move_height_diff > 0) {
-
-      if (!_prevent_up_next_turn) _xor_hash(Constants::ATHENA_EFFECT);
-
-      _prevent_up_next_turn = true;
-
-    } else {
-
-      if (_prevent_up_next_turn) _xor_hash(Constants::ATHENA_EFFECT);
-
-      _prevent_up_next_turn = false;
-
-    }
-
-    _turn *= -1;
-
-    _xor_hash(Constants::ZOBRIST_TURN);
-
-    if (Constants::DEBUG) {
-      if (!_sanity_check_workers() || _workers_map[move.to_sq] == -1) {
-        std::cout << to_text() << std::endl;
-        std::abort();
-      }
-    }
-
-  }
-
-  void Board::unmake_move(const Moves::Move & move) {
-    if (Constants::DEBUG) {
-      if (!_sanity_check_workers()) {
-        std::cout << to_text() << std::endl;
-        std::abort();
-      }
-    }
-
-    _turn *= -1;
-    _xor_hash(Constants::ZOBRIST_TURN);
-
-    if (_prevent_up_next_turn != move.had_athena_flag) {
-      _xor_hash(Constants::ATHENA_EFFECT);
-    }
-
-    _prevent_up_next_turn = move.had_athena_flag;
-    _won = false;
-
-    _undo_god_move(move);
-
-  }
-
-  void Board::make_null_move() {
-
-    _xor_hash(Constants::ZOBRIST_TURN);
-
-    _turn *= -1;
-
-    if (_prevent_up_next_turn) {
-
-      _xor_hash(Constants::ATHENA_EFFECT);
-
-      _prevent_up_next_turn = false;
-
-    }
-
-  }
-
-  void Board::unmake_null_move(bool prev_prevent_up_flag) {
-
-    _xor_hash(Constants::ZOBRIST_TURN);
-
-    _turn *= -1;
-
-    if (prev_prevent_up_flag) {
-
-      _xor_hash(Constants::ATHENA_EFFECT);
-
-      _prevent_up_next_turn = true;
-
-    }
-
-  }
-
-  std::vector<Moves::Move>Board::generate_moves() const {
-    auto moves = _generate_god_moves();
-
-    for (auto & move: moves) {
-      move.had_athena_flag = _prevent_up_next_turn;
-    }
-    return moves;
-  }
-
-  std::vector<Moves::Move>Board::generate_climber_moves() const {
-    auto moves = _generate_climber_god_moves();
-
-    for (auto & move: moves) {
-      move.had_athena_flag = _prevent_up_next_turn;
-    }
-    return moves;
-  }
-
-  std::vector<Moves::Move>Board::generate_quiet_moves() const {
-    auto moves = _generate_quiet_god_moves();
-
-    for (auto & move: moves) {
-      move.had_athena_flag = _prevent_up_next_turn;
-    }
-    return moves;
-  }
-
-  int Board::check_state() {
-    int last_player = -_turn;
-    if (_won) return last_player;
-    int last_player_idx = (last_player == 1) ? 0 : 1;
-
-    if (_last_move_height_diff <= -2 && _gods[last_player_idx] == Constants::God::PAN) {
-      return last_player;
-    }
-
-    if (!player_has_any_valid_move()) {
-      return -_turn;
-    }
-
-    return 0;
-  }
-
-  // ############################################################################
-
-  // # Hashing
-
-  // ############################################################################
-
-  uint64_t Board::_calculate_full_hash() const {
-
-    uint64_t h = 0;
-
-    for (sq_i i = 0; i < 25; ++i) {
-
-      if (_blocks[i] > 0) {
-
-        h ^= Constants::ZOBRIST_BLOCKS[i][_blocks[i] - 1];
-
-      }
-
-    }
-
-    for (int i = 0; i < 4; ++i) {
-
-      h ^= Constants::ZOBRIST_WORKERS[_workers[i]][_player_of_worker(i)];
-
-    }
-
-    if (_turn == -1) {
-
-      h ^= Constants::ZOBRIST_TURN;
-
-    }
-
-    if (_prevent_up_next_turn) {
-
-      h ^= Constants::ATHENA_EFFECT;
-
-    }
-
-    return h;
-
-  }
-
-  // ############################################################################
-
-  // # Helper Methods
-
-  // ############################################################################
-
-  int Board::_player_of_worker(int worker_index) const {
-    return (worker_index < 2) ? 0 : 1;
-  }
-
-  bool Board::_is_opponent_worker(int worker_index) const {
-    return (_turn == 1) ? (worker_index >= 2) : (worker_index < 2);
-  }
-
-  bool Board::_is_ally_worker(int worker_index) const {
-    return !_is_opponent_worker(worker_index);
-  }
-
-  std::optional < int > Board::_which_worker_is_here(sq_i s) const {
-    auto oc = _workers_map[s];
-    if (oc == -1) {
-      return std::nullopt;
-    }
-      return oc; // Implicit conversion to std::optional<int> works here
-    }
-
-  bool Board::is_free(sq_i s) const {
-
-    if (_blocks[s] >= 4) return false;
-
-    return _workers_map[s] == -1;
-
-  }
-
-  void Board::_move_worker(sq_i from, sq_i to) {
-    auto idx = _workers_map[from];
-
-    _xor_hash(Constants::ZOBRIST_WORKERS[from][_player_of_worker(idx)]);
-    _xor_hash(Constants::ZOBRIST_WORKERS[to][_player_of_worker(idx)]);
-
-    _workers[idx] = to;
-    if (from == to) return;
-    _workers_map[to] = idx;
-    _workers_map[from] = -1;
-
-  }
-
-  void Board::_swap_workers(sq_i sq1, sq_i sq2) {
-    // 1. Get the indices of the workers at each square.
-    int w1_idx = *_which_worker_is_here(sq1);
-    int w2_idx = *_which_worker_is_here(sq2);
-
-    // 2. Update the Zobrist hash by XORing out old positions and XORing in new ones.
-    _xor_hash(Constants::ZOBRIST_WORKERS[sq1][_player_of_worker(w1_idx)]); // Remove w1 from sq1
-    _xor_hash(Constants::ZOBRIST_WORKERS[sq2][_player_of_worker(w2_idx)]); // Remove w2 from sq2
-    _xor_hash(Constants::ZOBRIST_WORKERS[sq2][_player_of_worker(w1_idx)]); // Add w1 to sq2
-    _xor_hash(Constants::ZOBRIST_WORKERS[sq1][_player_of_worker(w2_idx)]); // Add w2 to sq1
-
-    // 3. Update the source-of-truth _workers array.
-    _workers[w1_idx] = sq2;
-    _workers[w2_idx] = sq1;
-
-    // 4. Update the _workers_map lookup table.
-    _workers_map[sq1] = w2_idx;
-    _workers_map[sq2] = w1_idx;
-  }
-
-  void Board::_move_worker_back(int worker_idx, sq_i original_pos) {
-
-    sq_i current_pos = _workers[worker_idx];
-
-    _xor_hash(Constants::ZOBRIST_WORKERS[current_pos][_player_of_worker(worker_idx)]);
-
-    _xor_hash(Constants::ZOBRIST_WORKERS[original_pos][_player_of_worker(worker_idx)]);
-
-    _workers[worker_idx] = original_pos;
-    if (current_pos == original_pos) return;
-    _workers_map[current_pos] = -1;
-    _workers_map[original_pos] = worker_idx;
-
-  }
-
-  void Board::_inc_block(sq_i s) {
-
-    int8_t h = _blocks[s];
-
-    if (h > 0) _xor_hash(Constants::ZOBRIST_BLOCKS[s][h - 1]);
-
-    _blocks[s]++;
-
-    _xor_hash(Constants::ZOBRIST_BLOCKS[s][h]);
-
-  }
-
-  void Board::_dec_block(sq_i s) {
-
-    int8_t h = _blocks[s];
-
-    _xor_hash(Constants::ZOBRIST_BLOCKS[s][h - 1]);
-
-    _blocks[s]--;
-
-    if (_blocks[s] > 0) _xor_hash(Constants::ZOBRIST_BLOCKS[s][_blocks[s] - 1]);
-
-  }
-
-  void Board::_restore_block_height(sq_i s, int8_t original_height) {
-
-    int8_t current_h = _blocks[s];
-
-    if (current_h > 0) _xor_hash(Constants::ZOBRIST_BLOCKS[s][current_h - 1]);
-
-    _blocks[s] = original_height;
-
-    if (original_height > 0) _xor_hash(Constants::ZOBRIST_BLOCKS[s][original_height - 1]);
-
-  }
-
-  bool adj_ok(sq_i from, sq_i to) {
-    return Constants::ADJACENCY_MATRIX[from][to];
-  }
-
-  std::optional < sq_i > Board::_calculate_push_square(sq_i from_sq, sq_i to_sq) const{
-
-    // Calculate the direction vector (dx, dy)
-
-    int dx = (to_sq % 5) - (from_sq % 5);
-
-    int dy = (to_sq / 5) - (from_sq / 5);
-
-    // Calculate the new coordinates for the pushed worker
-
-    int push_r = (to_sq / 5) + dy;
-
-    int push_c = (to_sq % 5) + dx;
-
-    // Check if the new square is within the 5x5 board boundaries
-
-    if (push_r >= 0 && push_r <= 4 && push_c >= 0 && push_c <= 4) {
-
-      // If it is, return the new square index
-
-      return static_cast < sq_i > (push_r * 5 + push_c);
-
-    }
-
-    // If the pushed square is off the board, return null
-
-    return std::nullopt;
-
-  }
-
-  bool Board::_height_ok(sq_i from, sq_i to) const {
-    return _blocks[to] - _blocks[from] <= 1;
-  }
-
-  bool Board::_move_checks(sq_i from, sq_i to) const {
-    return _height_ok(from, to) && adj_ok(from, to) && is_free(to);
-  }
-
-  bool Board::_build_ok(sq_i from, sq_i to, sq_i build) const {
-
-    if (!adj_ok(to, build) || to == build) return false;
-
-    return (from == build) || is_free(build);
-
-  }
-
-  bool Board::_complete_checks(sq_i from, sq_i to, sq_i build) const {
-    return _move_checks(from, to) && _build_ok(from, to, build);
-  }
-
-  bool Board::player_has_any_valid_move() {
-
-    int current_player_idx = (_turn == 1) ? 0 : 1;
-
     Constants::God god = _gods[current_player_idx];
 
-    int start_idx = (_turn == 1) ? 0 : 2;
+    if (_current_phase == 0) {
+        // --- PHASE 0: MOVEMENT ---
+        int move_val = action_idx - MOVE_OFFSET;
+        sq_i to_sq = move_val % 25;
+        sq_i from_sq = move_val / 25;
 
-    for (int i = 0; i < 2; ++i) {
+        _last_move_height_diff = _blocks[to_sq] - _blocks[from_sq];
+        _start_sq_of_turn = from_sq;
+        _active_worker = to_sq;
 
-      sq_i w_pos = _workers[start_idx + i];
-
-      for (sq_i to_sq: Constants::NEIGHBOURS[w_pos]) {
-        // Cannot move to a domed square
-        if (_blocks[to_sq] == 4) continue;
-        int from_h = _blocks[w_pos];
-        int to_h = _blocks[to_sq];
-        if (god == Constants::God::HERMES) {
-          if (is_free(to_sq)) {
-            return true;
-          }
-          continue; // Skip build checks for Hermes' initial move
-        }
-        // Cannot move up more than one level
-        if (to_h - from_h > 1) continue;
-        // Athena's power prevents moving up
-        if (_prevent_up_next_turn && to_h > from_h) continue;
         auto occupant = _which_worker_is_here(to_sq);
-        if (!occupant) { // Standard move to an empty square
-          // A valid move requires a subsequent valid build
-          for (sq_i build_sq: Constants::NEIGHBOURS[to_sq]) {
-            if (_blocks[build_sq] < 4 && (is_free(build_sq) || build_sq == w_pos)) {
-              return true;
-            }
-          }
-        } else { // Square is occupied
-          if (_is_opponent_worker( * occupant)) {
-            if (god == Constants::God::APOLLO) {
-              // Apollo swap: the current worker moves to `to_sq`, the opponent worker moves to `w_pos`.
-              // A valid Apollo move requires a subsequent valid build from the new position (`to_sq`).
-              for (sq_i build_sq: Constants::NEIGHBOURS[to_sq]) {
-                // Apollo cannot build on the square the opponent worker moves to (`w_pos`),
-                // nor on a domed square, nor on an occupied square (after the swap).
-                if (build_sq != w_pos && _blocks[build_sq] < 4 && is_free(build_sq)) {
-                  return true;
-                }
-              }
-            } else if (god == Constants::God::MINOTAUR) {
-              // Minotaur push: opponent worker is pushed to `push_sq`.
-              auto push_sq_opt = _calculate_push_square(w_pos, to_sq);
-              // Check if the push is valid (within board and target square is free)
-              if (push_sq_opt.has_value() && is_free( * push_sq_opt)) {
-                sq_i push_sq = * push_sq_opt; // Get the actual square value
-                // A valid Minotaur move requires a subsequent valid build.
-                // The Minotaur worker moves to `to_sq`.
-                for (sq_i build_sq: Constants::NEIGHBOURS[to_sq]) {
-                  // Cannot build on the square just moved from (`w_pos`),
-                  // nor the square the pushed worker landed on (`push_sq`),
-                  // nor a domed square, nor an occupied square.
-                  if (build_sq != w_pos && build_sq != push_sq && _blocks[build_sq] < 4 && is_free(build_sq)) {
-                    return true;
-                  }
-                }
-              }
-            }
-          }
+
+        if (god == Constants::God::APOLLO && occupant.has_value()) {
+            _swap_workers(from_sq, to_sq);
+        } else if (god == Constants::God::MINOTAUR && occupant.has_value()) {
+            auto push_sq = _calculate_push_square(from_sq, to_sq).value();
+            _move_worker(to_sq, push_sq);
+            _move_worker(from_sq, to_sq);
+        } else {
+            // Standard move (also handles Artemis/Hermes teleporting)
+            _move_worker(from_sq, to_sq);
         }
-      }
-    }
-    return false;
-  }
 
-  // ############################################################################
+        // Check Win Condition
+        if (_blocks[from_sq] < 3 && _blocks[to_sq] == 3) {
+            _won = true;
+        } else if (god == Constants::God::PAN && _last_move_height_diff <= -2) {
+            _won = true;
+        }
 
-  // # God Dispatchers
+        _current_phase = 1;
 
-  // ############################################################################
+    } else if (_current_phase == 1) {
+        // --- PHASE 1: FIRST BUILD ---
+        sq_i build_sq = action_idx - BUILD_1_OFFSET;
+        _inc_block(build_sq);
+        _last_build_sq = build_sq;
 
-  /**
- * @brief Executes a move on the board using the unified Move object.
- *
- * This method interprets the properties of the given Move object to perform
- * the correct actions based on the specified god's power. It assumes the
- * existence of helper methods like _move_worker, _swap_workers, _build_at,
- * and board state variables like _workers, _heights, and _athena_flag.
- */
-void Board::_execute_god_move(const Moves::Move& move) {
-  // The Athena flag must be cleared at the start of any turn.
-  // This ensures her power only lasts for one round of opponent moves.
-  _prevent_up_next_turn = false;
+        if (god == Constants::God::DEMETER || god == Constants::God::HEPHAESTUS || god == Constants::God::ATLAS) {
+            _current_phase = 2;
+        } else {
+            _end_turn();
+        }
 
-  switch (move.god) {
-    case Constants::God::APOLLO: {
-      auto opponent_idx_opt = _which_worker_is_here(move.to_sq);
-
-      if (opponent_idx_opt.has_value()) {
-        _swap_workers(move.from_sq, move.to_sq);
-      } else {
-        _move_worker(move.from_sq, move.to_sq);
-      }
-
-      _inc_block(move.build_sq);
-      break;
-    }
-
-    case Constants::God::MINOTAUR: {
-      auto occupant_idx = _which_worker_is_here(move.to_sq);
-      if (occupant_idx) {
-        int dx = (move.to_sq % 5) - (move.from_sq % 5);
-        int dy = (move.to_sq / 5) - (move.from_sq / 5);
-
-        sq_i push_sq = (move.to_sq / 5 + dy) * 5 + ((move.to_sq % 5) + dx);
-        _move_worker_back(*occupant_idx, push_sq);
-      }
-
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
-      break;
+    } else if (_current_phase == 2) {
+        // --- PHASE 2: SECOND BUILD / DOME / PASS ---
+        if (god == Constants::God::PROMETHEUS) {
+            if (action_idx != PASS_ACTION) {
+                sq_i build_sq = action_idx - BUILD_2_OFFSET;
+                _inc_block(build_sq);
+                _prometheus_built_early = true;
+            }
+            _current_phase = 0; // Transition to standard Move phase
+        } else {
+            if (action_idx != PASS_ACTION) {
+                if (god == Constants::God::ATLAS && action_idx == DOME_ACTION) {
+                    _restore_block_height(_last_build_sq, 4);
+                } else {
+                    sq_i build_sq = action_idx - BUILD_2_OFFSET;
+                    _inc_block(build_sq);
+                }
+            }
+            _end_turn();
+        }
     }
 
-    case Constants::God::PROMETHEUS: {
-      // Perform the optional pre-move build if it exists.
-      if (move.extra_build_sq.has_value()) {
-        _inc_block(*move.extra_build_sq);
-      }
-      if (_blocks[move.build_sq]>=4) {
-        std::cout << "here " << move.build_sq << "\n";
-      }
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
-      break;
-    }
-
-    case Constants::God::DEMETER:
-    case Constants::God::HEPHAESTUS: {
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
-      // Perform the second build if it exists.
-      if (move.extra_build_sq.has_value()) {
-        _inc_block(*move.extra_build_sq);
-      }
-      break;
-    }
-    // Atlas can build a dome at any level.
-    case Constants::God::ATLAS: {
-      _move_worker(move.from_sq, move.to_sq);
-      if (move.dome) {
-        _restore_block_height(move.build_sq, 4);
-      } else {
-        _inc_block(move.build_sq);
-      }
-      break;
-    }
-
-    // Athena sets a flag if she moves up.
-    case Constants::God::ATHENA: {
-      _last_move_height_diff = _blocks[move.to_sq] - _blocks[move.from_sq];
-      _move_worker(move.from_sq, move.to_sq);
-      _inc_block(move.build_sq);
-      break;
-    }
-
-    // Default case for gods with standard move-then-build mechanics.
-    // This includes Artemis, Hermes, and Pan, as their special powers relate
-    // to move *generation* or win *conditions*, not the execution of a single move.
-    case Constants::God::ARTEMIS:
-    case Constants::God::HERMES:
-    case Constants::God::PAN: {
-      default:
-        _last_move_height_diff = _blocks[move.to_sq] - _blocks[move.from_sq];
-        _move_worker(move.from_sq, move.to_sq);
-        _inc_block(move.build_sq);
-      break;
-    }
-  }
-}
-void Board::_undo_god_move(const Moves::Move& move) {
-  // Restore the Athena flag to its state *before* the move was made.
-  // This value should be stored in the Move object.
-  _prevent_up_next_turn = move.had_athena_flag;
-
-  switch (move.god) {
-    case Constants::God::APOLLO: {
-      _dec_block(move.build_sq);
-
-      auto opponent_idx_opt = _which_worker_is_here(move.from_sq);
-
-      if (opponent_idx_opt.has_value() && _is_opponent_worker(*opponent_idx_opt)) {
-        _swap_workers(move.from_sq, move.to_sq);
-      } else {
-        int my_worker_idx = *_which_worker_is_here(move.to_sq);
-        _move_worker_back(my_worker_idx, move.from_sq);
-      }
-      break;
-    }
-
-    case Constants::God::MINOTAUR: {
-      _dec_block(move.build_sq);
-      int my_worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(my_worker_idx, move.from_sq);
-
-      if (move.minotaur_pushed) {
-        int dx = (move.to_sq % 5) - (move.from_sq % 5);
-        int dy = (move.to_sq / 5) - (move.from_sq / 5);
-        sq_i push_sq = ((move.to_sq / 5) + dy) * 5 + ((move.to_sq % 5) + dx);
-        int opp_idx = *_which_worker_is_here(push_sq);
-        _move_worker_back(opp_idx, move.to_sq);
-      }
-      break;
-    }
-
-    case Constants::God::DEMETER:
-    case Constants::God::HEPHAESTUS:
-    case Constants::God::PROMETHEUS: {
-      _dec_block(move.build_sq);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
-      if (move.extra_build_sq) _dec_block(*move.extra_build_sq);
-      break;
-    }
-
-    case Constants::God::ATLAS: {
-      _restore_block_height(move.build_sq, *move.original_height);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
-      break;
-    }
-
-    case Constants::God::ATHENA: {
-      _dec_block(move.build_sq);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
-      _last_move_height_diff = 0;
-      break;
-    }
-
-    case Constants::God::ARTEMIS:
-    case Constants::God::HERMES:
-    case Constants::God::PAN:
-    default: {
-      _dec_block(move.build_sq);
-      int worker_idx = *_which_worker_is_here(move.to_sq);
-      _move_worker_back(worker_idx, move.from_sq);
-      _last_move_height_diff = 0;
-      break;
-    }
-  }
+    // Rather than tracking complex XORs across intermediate sub-states,
+    // recalculating guarantees no transposition collisions.
+    _hash = _calculate_full_hash();
 }
 
-bool Board::_blocked_by_athena(const int from_sq, const int to_sq) const {
-
-  return _prevent_up_next_turn && _blocks[to_sq] > _blocks[from_sq];
-
-}
-
-  std::vector<Moves::Move> Board::_generate_god_moves() const {
-    auto moves = _generate_climber_god_moves();
-    auto quiet_moves = _generate_quiet_god_moves();
-    moves.insert(moves.end(), quiet_moves.begin(), quiet_moves.end());
-    return moves;
-  }
-
-  std::vector<Moves::Move>Board::_generate_climber_god_moves() const {
-
+void Board::_end_turn() {
     int current_player_idx = (_turn == 1) ? 0 : 1;
 
-    switch (_gods[current_player_idx]) {
-      case Constants::God::APOLLO:
-        return _generate_climber_apollo_moves();
-      case Constants::God::ARTEMIS:
-        return _generate_climber_artemis_moves();
-      case Constants::God::ATHENA:
-        return _generate_climber_athena_moves();
-      case Constants::God::ATLAS:
-        return _generate_climber_atlas_moves();
-      case Constants::God::DEMETER:
-        return _generate_climber_demeter_moves();
-      case Constants::God::HEPHAESTUS:
-        return _generate_climber_hephaestus_moves();
-      case Constants::God::HERMES:
-        return _generate_climber_hermes_moves();
-      case Constants::God::MINOTAUR:
-        return _generate_climber_minotaur_moves();
-      case Constants::God::PAN:
-        return _generate_climber_pan_moves();
-      case Constants::God::PROMETHEUS:
-        return _generate_climber_prometheus_moves();
+    // Athena Effect
+    if (_gods[current_player_idx] == Constants::God::ATHENA && _last_move_height_diff > 0) {
+        _prevent_up_next_turn = true;
+    } else {
+        _prevent_up_next_turn = false;
     }
-    return {};
-  }
 
-  std::vector<Moves::Move>Board::_generate_quiet_god_moves() const {
+    _turn *= -1;
+    int next_player_idx = (_turn == 1) ? 0 : 1;
 
+    // Reset Trackers
+    _active_worker = -1;
+    _start_sq_of_turn = -1;
+    _last_build_sq = -1;
+    _prometheus_built_early = false;
+    _last_move_height_diff = 0;
+
+    _current_phase = 0;
+
+}
+
+std::vector<int> Board::generate_legal_actions() const {
+    std::vector<int> actions;
     int current_player_idx = (_turn == 1) ? 0 : 1;
-
-    switch (_gods[current_player_idx]) {
-      case Constants::God::APOLLO:
-        return _generate_quiet_apollo_moves();
-      case Constants::God::ARTEMIS:
-        return _generate_quiet_artemis_moves();
-      case Constants::God::ATHENA:
-        return _generate_quiet_athena_moves();
-      case Constants::God::ATLAS:
-        return _generate_quiet_atlas_moves();
-      case Constants::God::DEMETER:
-        return _generate_quiet_demeter_moves();
-      case Constants::God::HEPHAESTUS:
-        return _generate_quiet_hephaestus_moves();
-      case Constants::God::HERMES:
-        return _generate_quiet_hermes_moves();
-      case Constants::God::MINOTAUR:
-        return _generate_quiet_minotaur_moves();
-      case Constants::God::PAN:
-        return _generate_quiet_pan_moves();
-      case Constants::God::PROMETHEUS:
-        return _generate_quiet_prometheus_moves();
-    }
-    return {};
-  }
-
-// --- Apollo ---
-std::vector<Moves::Move> Board::_generate_climber_apollo_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
-
-      auto occupant = _which_worker_is_here(to_sq);
-      if (_blocks[to_sq] == 4 || (occupant && _is_ally_worker(*occupant))) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (build_sq == to_sq) continue;
-        if (build_sq == from_sq) {
-          if (occupant || _blocks[build_sq] == 4) continue;
-        } else if (!is_free(build_sq)) continue;
-        const auto win = _blocks[to_sq] == 3;
-        auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::APOLLO);
-        mv.winning = win;
-        moves.emplace_back(mv);
-      }
-    }
-  }
-  return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_apollo_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-
-      auto occupant = _which_worker_is_here(to_sq);
-      if (_blocks[to_sq] == 4 || (occupant && _is_ally_worker(*occupant))) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (build_sq == to_sq) continue;
-        if (build_sq == from_sq) {
-          if (occupant || _blocks[build_sq] == 4) continue;
-        } else if (!is_free(build_sq)) continue;
-        moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::APOLLO);
-      }
-    }
-  }
-  return moves;
-}
-
-// --- Artemis ---
-std::vector<Moves::Move> Board::_generate_climber_artemis_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      // First move is a climber
-      if (_blocks[to_sq] > _blocks[from_sq]) {
-
-        for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-          if (_build_ok(from_sq, to_sq, build_sq)) {
-            const auto win = _blocks[to_sq] == 3;
-            auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ARTEMIS);
-            mv.winning = win;
-            moves.emplace_back(mv);
-          }
-        }
-      }
-
-      for (sq_i second_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (second_sq == from_sq || !_move_checks(to_sq, second_sq) || _blocked_by_athena(to_sq, second_sq)) continue;
-
-        // Second move is a climber (relative to start)
-        if (_blocks[second_sq] > _blocks[from_sq]) {
-            for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
-                if (_build_ok(from_sq, second_sq, build_sq)) {
-                  const auto win = _blocks[second_sq] == 3;
-                  auto mv = Moves::Move(from_sq, second_sq, build_sq, Constants::God::ARTEMIS);
-                  mv.winning = win;
-                  moves.emplace_back(mv);
-                }
-            }
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_artemis_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      // First move is quiet
-      if (_blocks[to_sq] <= _blocks[from_sq]) {
-        for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-          if (_build_ok(from_sq, to_sq, build_sq)) {
-            moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ARTEMIS);
-          }
-        }
-      }
-
-      for (sq_i second_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (second_sq == from_sq || !_move_checks(to_sq, second_sq) || _blocked_by_athena(to_sq, second_sq)) continue;
-
-        // Second move is quiet (relative to start)
-        if (_blocks[second_sq] <= _blocks[from_sq]) {
-            for (sq_i build_sq : Constants::NEIGHBOURS[second_sq]) {
-                if (_build_ok(from_sq, second_sq, build_sq)) {
-                    moves.emplace_back(from_sq, second_sq, build_sq, Constants::God::ARTEMIS);
-                }
-            }
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-// --- Athena ---
-std::vector<Moves::Move> Board::_generate_climber_athena_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          const auto win = _blocks[to_sq] == 3;
-          auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATHENA);
-          mv.winning = win;
-          moves.emplace_back(mv);
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_athena_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::ATHENA);
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-// --- Atlas ---
-std::vector<Moves::Move> Board::_generate_climber_atlas_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          move.original_height = _blocks[build_sq];
-          const auto win = _blocks[to_sq] == 3;
-          auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          mv.original_height = _blocks[build_sq];
-          mv.winning = win;
-          moves.emplace_back(mv);
-          if (_blocks[build_sq] < 4) {
-            auto dome_move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-            dome_move.dome = true;
-            dome_move.original_height = _blocks[build_sq];
-            dome_move.winning = win;
-            moves.emplace_back(dome_move);
-          }
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_atlas_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-          move.original_height = _blocks[build_sq];
-          moves.emplace_back(move);
-          if (_blocks[build_sq] < 4) {
-            auto dome_move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::ATLAS);
-            dome_move.dome = true;
-            dome_move.original_height = _blocks[build_sq];
-            moves.emplace_back(dome_move);
-          }
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-// --- Demeter ---
-std::vector<Moves::Move> Board::_generate_climber_demeter_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
+    Constants::God god = _gods[current_player_idx];
     int start_idx = (_turn == 1) ? 0 : 2;
 
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
+    if (_current_phase == 0) {
+        // --- PHASE 0: MOVEMENT ---
+        for (int i = 0; i < 2; ++i) {
+            sq_i from_sq = _workers[start_idx + i];
 
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            if (!_move_checks(from_sq, to_sq)) continue;
-            std::vector<sq_i> build_sqs;
-
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    build_sqs.push_back(build_sq);
-                }
-            }
-            for (size_t j = 0; j < build_sqs.size(); ++j) {
-                const auto win = _blocks[to_sq] == 3;
-                auto mv = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-                mv.winning = win;
-                moves.emplace_back(mv);
-                for (size_t k = j + 1; k < build_sqs.size(); ++k) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-                    move.extra_build_sq = build_sqs[k];
-                    move.winning = win;
-                    moves.emplace_back(move);
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_demeter_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            if (!_move_checks(from_sq, to_sq)) continue;
-            std::vector<sq_i> build_sqs;
-
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    build_sqs.push_back(build_sq);
-                }
-            }
-
-            for (size_t j = 0; j < build_sqs.size(); ++j) {
-                moves.emplace_back(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-
-                for (size_t k = j + 1; k < build_sqs.size(); ++k) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sqs[j], Constants::God::DEMETER);
-                    move.extra_build_sq = build_sqs[k];
-                    moves.emplace_back(move);
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-// --- Hephaestus ---
-std::vector<Moves::Move> Board::_generate_climber_hephaestus_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            if (!_move_checks(from_sq, to_sq)) continue;
-
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    const auto win = _blocks[to_sq] == 3;
-                    auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-                    mv.winning = win;
-                    moves.emplace_back(mv);
-                    if (_blocks[build_sq] < 2) {
-                        auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-                        move.extra_build_sq = build_sq;
-                        move.winning = win;
-                        moves.emplace_back(move);
-                    }
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_hephaestus_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            if (!_move_checks(from_sq, to_sq)) continue;
-
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-                    if (_blocks[build_sq] < 2) {
-                        auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HEPHAESTUS);
-                        move.extra_build_sq = build_sq;
-                        moves.emplace_back(move);
-                    }
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-// --- Hermes ---
-std::vector<Moves::Move> Board::_generate_climber_hermes_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-        // Standard moves only, as other Hermes moves are non-climbing
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-            if (!_move_checks(from_sq, to_sq)) continue;
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    const auto win = _blocks[to_sq] == 3;
-                    auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::HERMES);
-                    mv.winning = win;
-                    moves.emplace_back(mv);
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_hermes_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-        int8_t h = _blocks[from_sq];
-
-        // Standard quiet moves
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-            if (!_move_checks(from_sq, to_sq)) continue;
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::HERMES);
-                }
-            }
-        }
-
-        // Build without moving (inherently quiet)
-        for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_build_ok(from_sq, from_sq, build_sq)) {
-                moves.emplace_back(from_sq, from_sq, build_sq, Constants::God::HERMES);
-            }
-        }
-
-        // Multi-step ground moves (inherently quiet)
-        std::array<bool, 25> visited{};
-        std::deque<sq_i> q;
-        q.push_back(from_sq);
-        visited[from_sq] = true;
-        while (!q.empty()) {
-            sq_i curr = q.front();
-            q.pop_front();
-            for (sq_i next_sq : Constants::NEIGHBOURS[curr]) {
-                if (visited[next_sq] || !is_free(next_sq) || _blocks[next_sq] != h) continue;
-                visited[next_sq] = true;
-                for (sq_i build_sq : Constants::NEIGHBOURS[next_sq]) {
-                    if (_build_ok(from_sq, next_sq, build_sq)) {
-                        moves.emplace_back(from_sq, next_sq, build_sq, Constants::God::HERMES);
-                    }
-                }
-                q.push_back(next_sq);
-            }
-        }
-    }
-    return moves;
-}
-
-// --- Minotaur ---
-std::vector<Moves::Move> Board::_generate_climber_minotaur_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-            if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            auto occupant = _which_worker_is_here(to_sq);
-            if (_blocks[to_sq] == 4 || (occupant && _is_ally_worker(*occupant))) continue;
-            std::optional<sq_i> push_sq;
-            if (occupant && _is_opponent_worker(*occupant)) {
-                int dx = (to_sq % 5) - (from_sq % 5);
-                int dy = (to_sq / 5) - (from_sq / 5);
-                int push_col = (to_sq % 5) + dx;
-                int push_row = (to_sq / 5) + dy;
-                if (push_row < 0 || push_row > 4 || push_col < 0 || push_col > 4) continue;
-                push_sq = push_row * 5 + push_col;
-                if (!is_free(*push_sq)) continue;
-            }
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (push_sq && *push_sq == build_sq) continue;
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
-                    move.minotaur_pushed = push_sq.has_value();
-                    const auto win = _blocks[to_sq] == 3;
-                    move.winning = win;
-                    moves.emplace_back(move);
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_minotaur_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-            if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            auto occupant = _which_worker_is_here(to_sq);
-            if (_blocks[to_sq] == 4 || (occupant && _is_ally_worker(*occupant))) continue;
-            std::optional<sq_i> push_sq;
-            if (occupant && _is_opponent_worker(*occupant)) {
-                int dx = (to_sq % 5) - (from_sq % 5);
-                int dy = (to_sq / 5) - (from_sq / 5);
-                int push_col = (to_sq % 5) + dx;
-                int push_row = (to_sq / 5) + dy;
-                if (push_row < 0 || push_row > 4 || push_col < 0 || push_col > 4) continue;
-                push_sq = push_row * 5 + push_col;
-                if (!is_free(*push_sq)) continue;
-            }
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (push_sq && *push_sq == build_sq) continue;
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::MINOTAUR);
-                    move.minotaur_pushed = push_sq.has_value();
-                    moves.emplace_back(move);
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-// --- Pan ---
-std::vector<Moves::Move> Board::_generate_climber_pan_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] <= _blocks[from_sq] &&
-        // This is not a climber but is wincon
-        !(_blocks[to_sq] == 0 && _blocks[from_sq] >= 2)
-      ) continue; // Climber check
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          const auto win = _blocks[to_sq] == 3 || (_blocks[from_sq] >= 2 && _blocks[to_sq] == 0);
-          auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PAN);
-          mv.winning = win;
-          moves.emplace_back(mv);
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_pan_moves() const {
-  std::vector<Moves::Move> moves;
-    moves.reserve(250);
-  int start_idx = (_turn == 1) ? 0 : 2;
-
-  for (int i = 0; i < 2; ++i) {
-    sq_i from_sq = _workers[start_idx + i];
-
-    for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-      if (_blocks[to_sq] > _blocks[from_sq] ||
-        // This is quiet but is wincon
-        (_blocks[to_sq] == 0 && _blocks[from_sq] >= 2)
-      ) continue; // Quiet check
-      if (_blocked_by_athena(from_sq, to_sq)) continue;
-      if (!_move_checks(from_sq, to_sq)) continue;
-
-      for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-        if (_build_ok(from_sq, to_sq, build_sq)) {
-          moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PAN);
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-// --- Prometheus ---
-std::vector<Moves::Move> Board::_generate_climber_prometheus_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-        // Only standard moves can be climbing moves for Prometheus
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] <= _blocks[from_sq]) continue; // Climber check
-            if (!_move_checks(from_sq, to_sq)) continue;
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    const auto win = _blocks[to_sq] == 3;
-                    auto mv = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
-                    mv.winning = win;
-                    moves.emplace_back(mv);
-                }
-            }
-        }
-    }
-    return moves;
-}
-
-std::vector<Moves::Move> Board::_generate_quiet_prometheus_moves() const {
-    std::vector<Moves::Move> moves;
-    moves.reserve(250);
-    int start_idx = (_turn == 1) ? 0 : 2;
-    for (int i = 0; i < 2; ++i) {
-        sq_i from_sq = _workers[start_idx + i];
-        // Generate quiet moves without pre-build
-        for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (_blocks[to_sq] > _blocks[from_sq]) continue; // Quiet check
-            if (!_move_checks(from_sq, to_sq)) continue;
-            if (_blocked_by_athena(from_sq, to_sq)) continue;
-            for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                if (_build_ok(from_sq, to_sq, build_sq)) {
-                    moves.emplace_back(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
-                }
-            }
-        }
-        // Generate moves with pre-build (inherently quiet)
-        for (sq_i opt_build_sq : Constants::NEIGHBOURS[from_sq]) {
-            if (!_build_ok(from_sq, from_sq, opt_build_sq)) continue;
+            // Standard God Reachability
             for (sq_i to_sq : Constants::NEIGHBOURS[from_sq]) {
-                int temp_h_adj = (to_sq == opt_build_sq) ? 1 : 0;
-                if (_blocks[to_sq] + temp_h_adj > _blocks[from_sq]) continue;
-                if (!is_free(to_sq) && to_sq != from_sq) continue;
-                if (!adj_ok(from_sq, to_sq)) continue;
-                for (sq_i build_sq : Constants::NEIGHBOURS[to_sq]) {
-                    if (_build_ok(from_sq, to_sq, build_sq)) {
-                        auto move = Moves::Move(from_sq, to_sq, build_sq, Constants::God::PROMETHEUS);
-                        move.extra_build_sq = opt_build_sq;
-                        if (move.build_sq == move.extra_build_sq && _blocks[move.build_sq] == 3) continue;
-                        moves.emplace_back(move);
+                if (_blocked_by_athena(from_sq, to_sq)) continue;
+
+                if (god == Constants::God::APOLLO) {
+                    if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
+                    if (_blocks[to_sq] == 4) continue;
+                    auto occupant = _which_worker_is_here(to_sq);
+                    if (occupant && _is_ally_worker(*occupant)) continue;
+                    actions.push_back(MOVE_OFFSET + from_sq * 25 + to_sq);
+                }
+                else if (god == Constants::God::MINOTAUR) {
+                    if (_blocks[to_sq] - _blocks[from_sq] > 1) continue;
+                    if (_blocks[to_sq] == 4) continue;
+                    auto occupant = _which_worker_is_here(to_sq);
+                    if (occupant && _is_ally_worker(*occupant)) continue;
+
+                    if (occupant && _is_opponent_worker(*occupant)) {
+                        auto push_sq = _calculate_push_square(from_sq, to_sq);
+                        if (!push_sq || !is_free(*push_sq)) continue;
                     }
+                    actions.push_back(MOVE_OFFSET + from_sq * 25 + to_sq);
+                }
+                else {
+                    // Standard rules for everyone else (including Prometheus)
+                    if (!move_checks(from_sq, to_sq)) continue;
+                    if (god == Constants::God::PROMETHEUS && _prometheus_built_early && _blocks[to_sq] > _blocks[from_sq]) continue;
+
+                    actions.push_back(MOVE_OFFSET + from_sq * 25 + to_sq);
                 }
             }
-        }
-    }
-    return moves;
-}
 
-  bool Board::is_valid_move(const Moves::Move& move) const {
-    // --- Phase 1: Basic universal checks ---
-
-    // The worker at from_sq must belong to the current player.
-    auto worker_idx_opt = _which_worker_is_here(move.from_sq);
-    if (!worker_idx_opt.has_value() || _is_opponent_worker(*worker_idx_opt)) {
-        return false;
-    }
-
-    // The god associated with the move must match the current player's god.
-    int current_player_idx = (_turn == 1) ? 0 : 1;
-    if (_gods[current_player_idx] != move.god) {
-        return false;
-    }
-
-    // Athena's effect: If active, the current player cannot move up.
-    if (_blocked_by_athena(move.from_sq, move.to_sq)) {
-        return false;
-    }
-
-    // --- Phase 2: God-specific validation ---
-
-    switch (move.god) {
-        case Constants::God::ATHENA:
-        case Constants::God::PAN: {
-            return _complete_checks(move.from_sq, move.to_sq, move.build_sq);
-        }
-
-        case Constants::God::APOLLO: {
-            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !adj_ok(move.from_sq, move.to_sq))
-                return false;
-
-            auto occupant = _which_worker_is_here(move.to_sq);
-            if (_blocks[move.to_sq] == 4 || (occupant && _is_ally_worker(*occupant)))
-                return false;
-
-            // Build square cannot be where the opponent will be moved to.
-            if (occupant && move.build_sq == move.from_sq)
-                return false;
-
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
-        }
-
-        case Constants::God::ARTEMIS: {
-            // Artemis can move one or two spaces. The move object only stores the final destination.
-            // We must check if a valid path of 1 or 2 steps exists.
-            bool one_step_valid = _move_checks(move.from_sq, move.to_sq);
-
-            bool two_step_valid = false;
-            if (!one_step_valid) {
-                 for (sq_i mid_sq : Constants::NEIGHBOURS[move.from_sq]) {
-                    if (_move_checks(move.from_sq, mid_sq)) {
-                        if (adj_ok(mid_sq, move.to_sq) && move.to_sq != move.from_sq && is_free(move.to_sq)) {
-                           if (!_blocked_by_athena(mid_sq, move.to_sq) && _height_ok(mid_sq, move.to_sq)) {
-                               two_step_valid = true;
-                               break;
-                           }
+            // Extended Reachability for Artemis
+            if (god == Constants::God::ARTEMIS) {
+                for (sq_i step1 : Constants::NEIGHBOURS[from_sq]) {
+                    if (move_checks(from_sq, step1) && !_blocked_by_athena(from_sq, step1)) {
+                        for (sq_i to_sq : Constants::NEIGHBOURS[step1]) {
+                            if (to_sq != from_sq && move_checks(step1, to_sq) && !_blocked_by_athena(step1, to_sq)) {
+                                actions.push_back(MOVE_OFFSET + from_sq * 25 + to_sq);
+                            }
                         }
                     }
                 }
             }
-            if (!one_step_valid && !two_step_valid) return false;
 
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
-        }
-
-        case Constants::God::ATLAS: {
-            if (!_move_checks(move.from_sq, move.to_sq)) return false;
-            if (move.dome && _blocks[move.build_sq] == 4) return false;
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
-        }
-
-        case Constants::God::DEMETER: {
-            if (!_complete_checks(move.from_sq, move.to_sq, move.build_sq)) return false;
-            if (move.extra_build_sq) {
-                if (*move.extra_build_sq == move.build_sq) return false;
-                if (!_build_ok(move.from_sq, move.to_sq, *move.extra_build_sq)) return false;
-            }
-            return true;
-        }
-
-        case Constants::God::HEPHAESTUS: {
-            if (!_complete_checks(move.from_sq, move.to_sq, move.build_sq)) return false;
-            if (move.extra_build_sq) {
-                if (*move.extra_build_sq != move.build_sq) return false;
-                // The second build cannot place a 4th level (dome).
-                // So the height before the first build must be < 2.
-                if (_blocks[move.build_sq] >= 2) return false;
-            }
-            return true;
-        }
-
-        case Constants::God::HERMES: {
-            // Case 1: Standard one-step move.
-            bool standard_move_ok = _move_checks(move.from_sq, move.to_sq);
-
-            // Case 2: Build without moving.
-            bool build_in_place_ok = (move.from_sq == move.to_sq);
-
-            // Case 3: Multi-step move on the same level.
-            bool multi_move_ok = false;
-            if (!standard_move_ok && !build_in_place_ok) {
-                int8_t h = _blocks[move.from_sq];
+            // Extended Reachability for Hermes
+            if (god == Constants::God::HERMES) {
                 std::array<bool, 25> visited{};
                 std::deque<sq_i> q;
-                q.push_back(move.from_sq);
-                visited[move.from_sq] = true;
+                q.push_back(from_sq);
+                visited[from_sq] = true;
+
                 while(!q.empty()) {
                     sq_i curr = q.front(); q.pop_front();
-                    if (curr == move.to_sq) {
-                        multi_move_ok = true;
-                        break;
-                    }
                     for (sq_i next_sq : Constants::NEIGHBOURS[curr]) {
-                        if (!visited[next_sq] && is_free(next_sq) && _blocks[next_sq] == h) {
+                        if (!visited[next_sq] && is_free(next_sq) && _blocks[next_sq] == _blocks[from_sq]) {
                             visited[next_sq] = true;
+                            actions.push_back(MOVE_OFFSET + from_sq * 25 + next_sq);
                             q.push_back(next_sq);
                         }
                     }
                 }
             }
-
-            if (!standard_move_ok && !build_in_place_ok && !multi_move_ok) return false;
-
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
         }
 
-        case Constants::God::MINOTAUR: {
-            if (_blocks[move.to_sq] - _blocks[move.from_sq] > 1 || !adj_ok(move.from_sq, move.to_sq))
-                return false;
+        // Remove duplicates caused by multi-path routing (Artemis/Hermes)
+        std::sort(actions.begin(), actions.end());
+        actions.erase(std::unique(actions.begin(), actions.end()), actions.end());
 
-            auto occupant = _which_worker_is_here(move.to_sq);
-            if (_blocks[move.to_sq] == 4 || (occupant && _is_ally_worker(*occupant)))
-                return false;
-
-            std::optional<sq_i> push_sq;
-            if (occupant) { // Must be an opponent
-                push_sq = _calculate_push_square(move.from_sq, move.to_sq);
-                if (!push_sq || !is_free(*push_sq)) return false;
+    } else if (_current_phase == 1) {
+        // --- PHASE 1: FIRST BUILD ---
+        sq_i from_sq = _active_worker;
+        for (sq_i build_sq : Constants::NEIGHBOURS[from_sq]) {
+            if (_build_ok(_start_sq_of_turn, from_sq, build_sq)) {
+                if (god == Constants::God::APOLLO && _start_sq_of_turn == build_sq) {
+                    continue;
+                }
+                if (god == Constants::God::MINOTAUR) {
+                    auto push_sq = _calculate_push_square(_start_sq_of_turn, from_sq);
+                    if (build_sq == push_sq) {
+                        continue;
+                    }
+                }
+                actions.push_back(BUILD_1_OFFSET + build_sq);
             }
-
-            if (push_sq && *push_sq == move.build_sq) return false;
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
         }
 
-        case Constants::God::PROMETHEUS: {
-            if (move.extra_build_sq) { // Pre-build move
-                if (!_build_ok(move.from_sq, move.from_sq, *move.extra_build_sq)) return false;
-
-                // Cannot move up after building
-                int temp_h_adj = (move.to_sq == *move.extra_build_sq) ? 1 : 0;
-                if (_blocks[move.to_sq] + temp_h_adj > _blocks[move.from_sq]) return false;
-
-                if (!adj_ok(move.from_sq, move.to_sq)) return false;
-                if (move.from_sq != move.to_sq && !is_free(move.to_sq)) return false;
-
-            } else { // Standard move
-                if (!_move_checks(move.from_sq, move.to_sq)) return false;
+    } else if (_current_phase == 2) {
+        // --- PHASE 2: SECOND BUILD / DOME / PASS ---
+        if (_start_sq_of_turn == -1) std::cout << "here" << std::endl;
+        if (god == Constants::God::PROMETHEUS) {
+            actions.push_back(PASS_ACTION);
+            for (sq_i build_sq : Constants::NEIGHBOURS[_start_sq_of_turn]) {
+                if (_build_ok(_start_sq_of_turn, _start_sq_of_turn, build_sq)) {
+                    actions.push_back(BUILD_2_OFFSET + build_sq);
+                }
             }
-
-            return _build_ok(move.from_sq, move.to_sq, move.build_sq);
+            std::sort(actions.begin(), actions.end());
+            actions.erase(std::unique(actions.begin(), actions.end()), actions.end());
         }
-
-        default:
-            return false;
+        else if (god == Constants::God::DEMETER) {
+            actions.push_back(PASS_ACTION);
+            for (sq_i build_sq : Constants::NEIGHBOURS[_active_worker]) {
+                if (build_sq != _last_build_sq && _build_ok(_start_sq_of_turn, _active_worker, build_sq)) {
+                    actions.push_back(BUILD_2_OFFSET + build_sq);
+                }
+            }
+        }
+        else if (god == Constants::God::HEPHAESTUS) {
+            actions.push_back(PASS_ACTION);
+            if (_blocks[_last_build_sq] < 3) { // Cannot dome on second build
+                actions.push_back(BUILD_2_OFFSET + _last_build_sq);
+            }
+        }
+        else if (god == Constants::God::ATLAS) {
+            actions.push_back(PASS_ACTION);
+            if (_blocks[_last_build_sq] < 4) {
+                actions.push_back(DOME_ACTION);
+            }
+        }
     }
+
+    return actions;
 }
 
+int Board::check_state() {
+    if (_won) return _turn; // The current player is the winner
 
-  bool operator < (const Board & lhs,
-    const Board & rhs) {
+    // If a player reaches a phase and has absolutely no legal actions
+    // (e.g. trapped in Phase 0, or moved into a corner and can't build in Phase 1)
+    if (generate_legal_actions().empty()) {
+        return -_turn; // The current player loses
+    }
 
+    return 0;
+}
+
+// ############################################################################
+// # Hashing
+// ############################################################################
+
+uint64_t Board::_calculate_full_hash() const {
+    uint64_t h = 0;
+
+    for (sq_i i = 0; i < 25; ++i) {
+        if (_blocks[i] > 0) {
+            h ^= Constants::ZOBRIST_BLOCKS[i][_blocks[i] - 1];
+        }
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        h ^= Constants::ZOBRIST_WORKERS[_workers[i]][_player_of_worker(i)];
+    }
+
+    if (_turn == -1) h ^= Constants::ZOBRIST_TURN;
+    if (_prevent_up_next_turn) h ^= Constants::ATHENA_EFFECT;
+
+    // Sub-turn specific hashing to prevent transposition table collisions
+    h ^= (static_cast<uint64_t>(_current_phase) * 0x123456789ABCDEFULL);
+    if (_active_worker != -1) h ^= (static_cast<uint64_t>(_active_worker) * 0xFEDCBA987654321ULL);
+    if (_prometheus_built_early) h ^= 0x9999999999999999ULL;
+
+    return h;
+}
+
+// ############################################################################
+// # Helper Methods
+// ############################################################################
+
+int Board::_player_of_worker(int worker_index) const {
+    return (worker_index < 2) ? 0 : 1;
+}
+
+bool Board::_is_opponent_worker(int worker_index) const {
+    return (_turn == 1) ? (worker_index >= 2) : (worker_index < 2);
+}
+
+bool Board::_is_ally_worker(int worker_index) const {
+    return !_is_opponent_worker(worker_index);
+}
+
+std::optional<int> Board::_which_worker_is_here(sq_i s) const {
+    auto oc = _workers_map[s];
+    if (oc == -1) return std::nullopt;
+    return oc;
+}
+
+bool Board::is_free(sq_i s) const {
+    if (_blocks[s] >= 4) return false;
+    return _workers_map[s] == -1;
+}
+
+void Board::_move_worker(sq_i from, sq_i to) {
+    auto idx = _workers_map[from];
+    _workers[idx] = to;
+    if (from == to) return;
+    _workers_map[to] = idx;
+    _workers_map[from] = -1;
+}
+
+void Board::_swap_workers(sq_i sq1, sq_i sq2) {
+    int w1_idx = *_which_worker_is_here(sq1);
+    int w2_idx = *_which_worker_is_here(sq2);
+    _workers[w1_idx] = sq2;
+    _workers[w2_idx] = sq1;
+    _workers_map[sq1] = w2_idx;
+    _workers_map[sq2] = w1_idx;
+}
+
+void Board::_inc_block(sq_i s) {
+    _blocks[s]++;
+}
+
+void Board::_dec_block(sq_i s) {
+    _blocks[s]--;
+}
+
+void Board::_restore_block_height(sq_i s, int8_t original_height) {
+    _blocks[s] = original_height;
+}
+
+bool adj_ok(sq_i from, sq_i to) {
+    return Constants::ADJACENCY_MATRIX[from][to];
+}
+
+std::optional<sq_i> Board::_calculate_push_square(sq_i from_sq, sq_i to_sq) const {
+    int dx = (to_sq % 5) - (from_sq % 5);
+    int dy = (to_sq / 5) - (from_sq / 5);
+    int push_r = (to_sq / 5) + dy;
+    int push_c = (to_sq % 5) + dx;
+    if (push_r >= 0 && push_r <= 4 && push_c >= 0 && push_c <= 4) {
+        return static_cast<sq_i>(push_r * 5 + push_c);
+    }
+    return std::nullopt;
+}
+
+bool Board::_height_ok(sq_i from, sq_i to) const {
+    return _blocks[to] - _blocks[from] <= 1;
+}
+
+bool Board::move_checks(sq_i from, sq_i to) const {
+    return _height_ok(from, to) && adj_ok(from, to) && is_free(to);
+}
+
+bool Board::_build_ok(sq_i old_sq, sq_i curr_sq, sq_i build) const {
+    if (!adj_ok(curr_sq, build) || curr_sq == build) return false;
+    return (old_sq == build) || is_free(build);
+}
+
+bool Board::_complete_checks(sq_i from, sq_i to, sq_i build) const {
+    return move_checks(from, to) && _build_ok(from, to, build);
+}
+
+bool Board::_blocked_by_athena(const int from_sq, const int to_sq) const {
+    return _prevent_up_next_turn && _blocks[to_sq] > _blocks[from_sq];
+}
+
+bool operator<(const Board &lhs, const Board &rhs) {
     return lhs._hash < rhs._hash;
-
-  }
+}
 
 } // namespace Santorini

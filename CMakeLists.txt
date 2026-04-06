@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Davi_1.0_Phoenix)
+project(Davi_2.3.7_Raven)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -29,10 +29,10 @@ target_link_libraries(
 # ############################################################################
 # # MAIN EXECUTABLE
 # ############################################################################
-add_executable(Davi_1.0_Phoenix src/main.cpp src/board.cpp src/moves.cpp) # 
+add_executable(Davi_2.3.7_Raven src/main.cpp src/board.cpp src/moves.cpp) # 
 
 target_link_libraries(
-        Davi_1.0_Phoenix
+        Davi_2.3.7_Raven
         PRIVATE santorini_engine
 ) 
 
@@ -80,14 +80,14 @@ gtest_discover_tests(run_tests)
 file(GLOB TORCH_DLLS "${CMAKE_PREFIX_PATH}/lib/*.dll")
 
 # Copy them to the directory where the executable is built
-add_custom_command(TARGET Davi_1.0_Phoenix POST_BUILD
+add_custom_command(TARGET Davi_2.3.7_Raven POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${TORCH_DLLS}
-        $<TARGET_FILE_DIR:Davi_1.0_Phoenix>
+        $<TARGET_FILE_DIR:Davi_2.3.7_Raven>
 )
 
-add_custom_command(TARGET Davi_1.0_Phoenix POST_BUILD
+add_custom_command(TARGET Davi_2.3.7_Raven POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/models/santorini_evaluator.pt"
-        $<TARGET_FILE_DIR:Davi_1.0_Phoenix>
+        $<TARGET_FILE_DIR:Davi_2.3.7_Raven>
 )

@@ -19,16 +19,12 @@ namespace Santorini {
 
     namespace fs = std::filesystem;
 
-    /**
-     * Helper to find the directory where the current .exe is located.
-     */
     inline fs::path get_executable_dir() {
 #ifdef _WIN32
         char path[MAX_PATH];
         GetModuleFileNameA(NULL, path, MAX_PATH);
         return fs::path(path).parent_path();
 #else
-        // Fallback for Linux if you ever move there
         return fs::read_symlink("/proc/self/exe").parent_path();
 #endif
     }
@@ -39,20 +35,15 @@ namespace Santorini {
 
         if (!is_loaded) {
             try {
-                // Get the absolute path to the model sitting next to the EXE
                 fs::path model_path = get_executable_dir() / "santorini_evaluator.pt";
 
                 if (!fs::exists(model_path)) {
                     std::cerr << "[ERROR] Model file not found at: " << model_path.string() << "\n";
-                    std::cerr << "Make sure 'santorini_evaluator.pt' is in the same folder as the .exe\n";
                     std::exit(-1);
                 }
 
-                // Load from the absolute path string
                 module = torch::jit::load(model_path.string());
-
                 module.to(torch::kCUDA);
-
                 module.eval();
                 is_loaded = true;
 
@@ -64,83 +55,96 @@ namespace Santorini {
         return module;
     }
 
-inline int score_position(const Board& b) {
-    // 1. Construct CPU tensor first (Faster to index on CPU before moving to GPU)
-    torch::Tensor cpu_tensor = torch::zeros({1, 28, 5, 5}, torch::kFloat32);
-    auto tensor_acc = cpu_tensor.accessor<float, 4>(); // [batch][channel][row][col]
+    struct NNOutput {
+        float value;
+        std::array<float, 677> policy_probs;
+    };
 
-    // --- Planes 0-3: Map blocks/heights ---
-    auto blocks = b.get_blocks();
-    for (int i = 0; i < 25; ++i) {
-        int h = blocks[i];
-        if (h >= 1 && h <= 4) {
-            tensor_acc[0][h - 1][i / 5][i % 5] = 1.0f;
-        }
-    }
+    // Make sure it takes phase_idx
+    inline NNOutput evaluate_board_nn(const Board& b, int phase_idx) {
+        // STATIC tensor prevents thousands of memory allocations per second
+        static torch::Tensor cpu_tensor = torch::zeros({1, 31, 5, 5}, torch::kFloat32);
+        cpu_tensor.zero_(); // Clear previous iteration's data
+        auto tensor_acc = cpu_tensor.accessor<float, 4>();
 
-    // --- Setup Active vs Waiting Player ---
-    int my_god_idx, opp_god_idx;
-    std::array<int, 2> my_workers, opp_workers;
-    float is_player_1 = (b.get_turn() == 1) ? 1.0f : 0.0f;
-
-    auto workers = b.get_workers();
-    auto gods = b.get_gods();
-
-    if (b.get_turn() == 1) { // Gray's turn
-        my_workers = {workers[0], workers[1]};
-        opp_workers = {workers[2], workers[3]};
-        my_god_idx = static_cast<int>(gods[0]);
-        opp_god_idx = static_cast<int>(gods[1]);
-    } else { // Blue's turn
-        my_workers = {workers[2], workers[3]};
-        opp_workers = {workers[0], workers[1]};
-        my_god_idx = static_cast<int>(gods[1]);
-        opp_god_idx = static_cast<int>(gods[0]);
-    }
-
-    // --- Planes 4-5: Fill workers ---
-    for (int idx : my_workers) tensor_acc[0][4][idx / 5][idx % 5] = 1.0f;
-    for (int idx : opp_workers) tensor_acc[0][5][idx / 5][idx % 5] = 1.0f;
-
-    // --- Planes 6-7: Fill Context (Turn and Athena) ---
-    bool athena_active = b.get_prevent_up_next_turn();
-    for (int r = 0; r < 5; ++r) {
-        for (int c = 0; c < 5; ++c) {
-            tensor_acc[0][6][r][c] = is_player_1;
-            if (athena_active) {
-                tensor_acc[0][7][r][c] = 1.0f;
+        auto blocks = b.get_blocks();
+        for (int i = 0; i < 25; ++i) {
+            int h = blocks[i];
+            if (h >= 1 && h <= 4) {
+                tensor_acc[0][h - 1][i / 5][i % 5] = 1.0f;
             }
         }
-    }
 
-    // --- Planes 8-27: Fill Gods ---
-    for (int r = 0; r < 5; ++r) {
-        for (int c = 0; c < 5; ++c) {
-            tensor_acc[0][8 + my_god_idx][r][c] = 1.0f;
-            tensor_acc[0][18 + opp_god_idx][r][c] = 1.0f;
+        int my_god_idx, opp_god_idx;
+        std::array<int, 2> my_workers, opp_workers;
+        float is_player_1 = (b.get_turn() == 1) ? 1.0f : 0.0f;
+
+        auto workers = b.get_workers();
+        auto gods = b.get_gods();
+
+        if (b.get_turn() == 1) {
+            my_workers = {workers[0], workers[1]};
+            opp_workers = {workers[2], workers[3]};
+            my_god_idx = static_cast<int>(gods[0]);
+            opp_god_idx = static_cast<int>(gods[1]);
+        } else {
+            my_workers = {workers[2], workers[3]};
+            opp_workers = {workers[0], workers[1]};
+            my_god_idx = static_cast<int>(gods[1]);
+            opp_god_idx = static_cast<int>(gods[0]);
         }
+
+        for (int idx : my_workers) tensor_acc[0][4][idx / 5][idx % 5] = 1.0f;
+        for (int idx : opp_workers) tensor_acc[0][5][idx / 5][idx % 5] = 1.0f;
+
+        bool athena_active = b.get_prevent_up_next_turn();
+        for (int r = 0; r < 5; ++r) {
+            for (int c = 0; c < 5; ++c) {
+                tensor_acc[0][6][r][c] = is_player_1;
+                if (athena_active) tensor_acc[0][7][r][c] = 1.0f;
+                // NO MORE OUT OF BOUNDS WRITE HERE
+            }
+        }
+
+        for (int r = 0; r < 5; ++r) {
+            for (int c = 0; c < 5; ++c) {
+                tensor_acc[0][8 + my_god_idx][r][c] = 1.0f;
+                tensor_acc[0][18 + opp_god_idx][r][c] = 1.0f;
+            }
+        }
+
+        // Apply correct Phase plane
+        if (phase_idx >= 0 && phase_idx <= 2) {
+            for (int r = 0; r < 5; ++r) {
+                for (int c = 0; c < 5; ++c) {
+                    tensor_acc[0][28 + phase_idx][r][c] = 1.0f;
+                }
+            }
+        }
+
+        torch::Tensor state_tensor = cpu_tensor.to(torch::kCUDA);
+        auto& module = get_evaluator_model();
+        std::vector<torch::jit::IValue> inputs{state_tensor};
+
+        torch::NoGradGuard no_grad;
+        auto outputs = module.forward(inputs).toTuple();
+
+        torch::Tensor policy_logits = outputs->elements()[0].toTensor();
+        torch::Tensor value_logit   = outputs->elements()[1].toTensor();
+
+        float p = torch::sigmoid(value_logit).item<float>();
+        float v = (p * 2.0f) - 1.0f;
+
+        torch::Tensor policy_probs = torch::softmax(policy_logits, 1).cpu();
+        auto policy_acc = policy_probs.accessor<float, 2>();
+
+        NNOutput result;
+        result.value = v;
+        for (int i = 0; i < 677; ++i) {
+            result.policy_probs[i] = policy_acc[0][i];
+        }
+
+        return result;
     }
-
-    // 2. Move to device and evaluate
-    torch::Tensor state_tensor = cpu_tensor;
-    state_tensor = cpu_tensor.to(torch::kCUDA);
-
-
-    auto& module = get_evaluator_model();
-    std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(state_tensor);
-
-    // Disable autograd for inference speed
-    torch::NoGradGuard no_grad;
-
-    // Forward pass
-    torch::Tensor output = module.forward(inputs).toTensor();
-    float current_player_score_logit = output.item<float>();
-
-    // 3. Perspective formatting
-    int score = static_cast<int>(current_player_score_logit * 100.0f);
-
-    return (b.get_turn() == 1) ? score : -score;
-}
 
 } // namespace Santorini
