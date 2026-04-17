@@ -4,7 +4,6 @@
 #include <string>
 #include <sstream>
 #include <optional>
-#include <memory>
 #include <vector>
 #include <deque>
 #include <algorithm>
@@ -18,7 +17,7 @@ class SantoriniEngine {
 public:
     SantoriniEngine() = default;
 
-    std::string sq_to_text(int sq) const {
+    static std::string sq_to_text(int sq) {
         if (sq < 0 || sq > 24) return "";
         char r = 'a' + (sq % 5);
         char c = '1' + (sq / 5);
@@ -93,6 +92,9 @@ public:
         res += sq_to_text(to_sq);
         if (build1 != -1) {
             res += sq_to_text(build1);
+        }
+        else {
+            res += sq_to_text(from_sq);
         }
 
         // Append God specific extra build components
