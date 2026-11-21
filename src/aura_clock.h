@@ -103,12 +103,14 @@ inline constexpr std::array<double, 93> own_turns_left = {
 };
 inline double expected_own_turns(int elapsed_plies) {
     if (elapsed_plies < 0) throw std::invalid_argument("negative elapsed ply");
-    // No observations survive at/after 93: return to Oracle's divisor of 10.
-    return elapsed_plies < static_cast<int>(own_turns_left.size())
+    // Treat the final four plies as requiring no extra thinking: two own turns.
+    // Keep the original L>elapsed conditioning; clamp the mean divisor afterward.
+    const double original = elapsed_plies < static_cast<int>(own_turns_left.size())
         ? own_turns_left[elapsed_plies] : 10.0;
+    return std::max(2.0, original - 2.0);
 }
 inline int budget_ms(int remaining_ms, int elapsed_plies) {
-    const double turns = std::max(1.0, expected_own_turns(elapsed_plies));
+    const double turns = std::max(2.0, expected_own_turns(elapsed_plies));
     if (remaining_ms <= 0) return 0;
     // Leave up to 50ms for interruption granularity and protocol overhead.
     // On small clocks reserve 10%; never force a 50ms minimum search.
