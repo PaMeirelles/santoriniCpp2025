@@ -515,7 +515,7 @@ inline SearchResult get_best_move(
     TranspositionTable& tt,
     std::optional<int> max_depth = std::nullopt)
 {
-    auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 10);
+    auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 13);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
