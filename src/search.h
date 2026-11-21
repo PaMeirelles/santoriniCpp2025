@@ -18,7 +18,6 @@
 
 namespace Santorini {
 
-
 // Use the correct type alias as defined in your constants/moves headers
 using sq_i = int8_t;
 
@@ -171,11 +170,12 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
     auto k1 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][0] : std::nullopt;
     auto k2 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][1] : std::nullopt;
     auto k3 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][2] : std::nullopt;
+    auto current_god = board.get_current_god();
     for (auto& mv : moves) {
-        // Generated wins outrank every killer/build/height heuristic.
-        if (mv.winning) {
+        // Pan's winning move should be scored highly, then we continue to the next move.
+        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
             mv.score = 1000000;
-            continue;
+            return;
         }
         // --- Killer Move Heuristic (unchanged) ---
         if (k1.has_value() && *k1==mv) {
@@ -263,8 +263,12 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
 int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
     KillerMoves& k_moves, bool allow_null = true);
 
-inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves,
-    int ply, int qdepth=0, unsigned visits=0, int credits=1) {
+inline bool qsearch_reaches_new_height(const Board& board, const Moves::Move& move, int highest) {
+    return board.get_blocks()[move.to_sq] > highest;
+}
+
+inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply,
+    int highest_q_height = -1) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -291,8 +295,6 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         }
     }
 
-    if(qdepth>=4) return alpha;
-    int searched=0;
     bool visited_to_sq[25] = {false};
     score_moves(climber_moves, search_info.board, k_moves, ply);
 
@@ -302,13 +304,13 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         if (visited_to_sq[move.to_sq]) {
             continue;
         }
-        unsigned next_visits=visits;
-        int next_credits=credits;
-        if(searched>=4) break;
-        ++searched;
+        if (!qsearch_reaches_new_height(search_info.board, move, highest_q_height)) {
+            continue;
+        }
+        const int landing_height = search_info.board.get_blocks()[move.to_sq];
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1,qdepth+1,next_visits,next_credits);
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1, landing_height);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
