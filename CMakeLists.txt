@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_10.0.0_Oracle)
+project(Paladini_11.0.0_Aura)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,11 +18,11 @@ add_library(
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_10.0.0_Oracle src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Paladini_11.0.0_Aura src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_10.0.0_Oracle
+        Paladini_11.0.0_Aura
         PRIVATE santorini_engine
 )
 

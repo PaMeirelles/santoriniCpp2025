@@ -1,3 +1,4 @@
+#include "aura_clock.h"
 #pragma once
 
 #include <iostream>
@@ -513,9 +514,13 @@ inline SearchResult get_best_move(
     Board& board,
     int remaining_time_ms,
     TranspositionTable& tt,
-    std::optional<int> max_depth = std::nullopt)
+    std::optional<int> max_depth = std::nullopt,
+    std::optional<int> elapsed_plies = std::nullopt)
 {
-    auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 10);
+    if (!max_depth && !elapsed_plies) throw std::invalid_argument("Aura requires elapsed ply");
+    const int budget = max_depth ? remaining_time_ms / 10
+                                 : AuraClock::budget_ms(remaining_time_ms, *elapsed_plies);
+    auto thinking_time = std::chrono::milliseconds(budget);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
