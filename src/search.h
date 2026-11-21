@@ -515,23 +515,18 @@ inline SearchResult get_best_move(
     TranspositionTable& tt,
     std::optional<int> max_depth = std::nullopt)
 {
-    // Top mean-Elo decile fit, in hundredths of a move across both players.
+    // Top mean-Elo decile length and median cheap-turn equivalents, both in hundredths.
     static constexpr int center = 3067;
-    static constexpr std::array god_weights = {588, 652, 142, 144, -765, -812, 313, 539, -274, -526};
-    static constexpr double scale = [] {
-        double sum_of_fractions = 0.0;
-        for (const int gray : god_weights) {
-            for (const int blue : god_weights) {
-                sum_of_fractions += 200.0 / (center + gray + blue);
-            }
-        }
-        return 0.1 * god_weights.size() * god_weights.size() / sum_of_fractions;
-    }();
+    static constexpr std::array length_offsets = {588, 652, 142, 144, -765, -812, 313, 539, -274, -526};
+    static constexpr std::array cheap_turns = {1454, 1162, 1059, 1118, 691, 852, 1042, 1385, 1195, 701};
     const auto& gods = board.get_gods();
-    const int expected_moves = center + god_weights[static_cast<int>(gods[0])]
-                                     + god_weights[static_cast<int>(gods[1])];
+    const int gray = static_cast<int>(gods[0]);
+    const int blue = static_cast<int>(gods[1]);
+    const int expected_moves = center + length_offsets[gray] + length_offsets[blue];
+    // Average the two mirror corrections and keep the half-hundredth until division.
+    const int twice_useful_moves = 2 * expected_moves - cheap_turns[gray] - cheap_turns[blue];
     const auto budget = max_depth ? remaining_time_ms / 13
-        : static_cast<int64_t>(remaining_time_ms * scale * 200.0 / expected_moves);
+        : static_cast<int64_t>(remaining_time_ms) * 400 / twice_useful_moves;
     auto thinking_time = std::chrono::milliseconds(budget);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
