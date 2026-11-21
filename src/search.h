@@ -171,12 +171,11 @@ inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, con
     auto k1 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][0] : std::nullopt;
     auto k2 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][1] : std::nullopt;
     auto k3 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][2] : std::nullopt;
-    auto current_god = board.get_current_god();
     for (auto& mv : moves) {
-        // Pan's winning move should be scored highly, then we continue to the next move.
-        if (current_god == Constants::God::PAN && board.get_blocks()[mv.from_sq] >= 2 && board.get_blocks()[mv.to_sq] == 0) {
+        // Generated wins outrank every killer/build/height heuristic.
+        if (mv.winning) {
             mv.score = 1000000;
-            return;
+            continue;
         }
         // --- Killer Move Heuristic (unchanged) ---
         if (k1.has_value() && *k1==mv) {
