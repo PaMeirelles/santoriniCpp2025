@@ -516,11 +516,22 @@ inline SearchResult get_best_move(
     std::optional<int> max_depth = std::nullopt)
 {
     // Top mean-Elo decile fit, in hundredths of a move across both players.
+    static constexpr int center = 3067;
     static constexpr std::array god_weights = {588, 652, 142, 144, -765, -812, 313, 539, -274, -526};
+    static constexpr double scale = [] {
+        double sum_of_fractions = 0.0;
+        for (const int gray : god_weights) {
+            for (const int blue : god_weights) {
+                sum_of_fractions += 200.0 / (center + gray + blue);
+            }
+        }
+        return 0.1 * god_weights.size() * god_weights.size() / sum_of_fractions;
+    }();
     const auto& gods = board.get_gods();
-    const int expected_moves = 3067 + god_weights[static_cast<int>(gods[0])]
-                                    + god_weights[static_cast<int>(gods[1])];
-    const auto budget = max_depth ? remaining_time_ms / 13 : static_cast<int64_t>(remaining_time_ms) * 200 / expected_moves;
+    const int expected_moves = center + god_weights[static_cast<int>(gods[0])]
+                                     + god_weights[static_cast<int>(gods[1])];
+    const auto budget = max_depth ? remaining_time_ms / 13
+        : static_cast<int64_t>(remaining_time_ms * scale * 200.0 / expected_moves);
     auto thinking_time = std::chrono::milliseconds(budget);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
