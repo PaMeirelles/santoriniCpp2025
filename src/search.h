@@ -515,7 +515,13 @@ inline SearchResult get_best_move(
     TranspositionTable& tt,
     std::optional<int> max_depth = std::nullopt)
 {
-    auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 13);
+    // Top-quartile fit, in hundredths of a move across both players.
+    static constexpr std::array god_weights = {669, 581, 139, 118, -766, -745, 311, 502, -279, -529};
+    const auto& gods = board.get_gods();
+    const int expected_moves = 2850 + god_weights[static_cast<int>(gods[0])]
+                                    + god_weights[static_cast<int>(gods[1])];
+    const auto budget = max_depth ? remaining_time_ms / 13 : static_cast<int64_t>(remaining_time_ms) * 200 / expected_moves;
+    auto thinking_time = std::chrono::milliseconds(budget);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
