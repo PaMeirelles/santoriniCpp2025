@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <torch/script.h>
 #include "board.h"
+#include "context_planes.h"
 #include "constants.h"
 
 #ifdef _WIN32
@@ -63,7 +64,7 @@ namespace Santorini {
     // Make sure it takes phase_idx
     inline NNOutput evaluate_board_nn(const Board& b, int phase_idx) {
         // STATIC tensor prevents thousands of memory allocations per second
-        static torch::Tensor cpu_tensor = torch::zeros({1, 31, 5, 5}, torch::kFloat32);
+        static torch::Tensor cpu_tensor = torch::zeros({1, 35, 5, 5}, torch::kFloat32);
         cpu_tensor.zero_(); // Clear previous iteration's data
         auto tensor_acc = cpu_tensor.accessor<float, 4>();
 
@@ -121,6 +122,10 @@ namespace Santorini {
                 }
             }
         }
+
+        encode_context_planes(cpu_tensor.data_ptr<float>() + 31 * 25,
+                              b.get_active_worker(), b.get_movement_origin(),
+                              b.get_previous_build(), b.get_prometheus_prebuilt());
 
         torch::Tensor state_tensor = cpu_tensor.to(torch::kCUDA);
         auto& module = get_evaluator_model();

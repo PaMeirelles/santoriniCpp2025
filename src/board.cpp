@@ -162,6 +162,7 @@ void Board::make_action(int action_idx) {
                 sq_i build_sq = action_idx - BUILD_2_OFFSET;
                 _inc_block(build_sq);
                 _prometheus_built_early = true;
+                _last_build_sq = build_sq;
             }
             _current_phase = 0; // Transition to standard Move phase
         } else {

@@ -46,6 +46,10 @@ public:
     Constants::God get_current_god() const { return _turn == 1 ? _gods[0] : _gods[1]; }
     int get_current_phase() const { return _current_phase; }
     bool get_won() const { return _won; }
+    int get_active_worker() const { return _active_worker; }
+    int get_movement_origin() const { return _start_sq_of_turn; }
+    int get_previous_build() const { return _last_build_sq; }
+    bool get_prometheus_prebuilt() const { return _prometheus_built_early; }
     bool move_checks(sq_i from, sq_i to) const;
 
 private:
