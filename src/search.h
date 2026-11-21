@@ -515,18 +515,24 @@ inline SearchResult get_best_move(
     TranspositionTable& tt,
     std::optional<int> max_depth = std::nullopt)
 {
-    // Top mean-Elo decile length and median cheap-turn equivalents, both in hundredths.
-    static constexpr int center = 3067;
-    static constexpr std::array length_offsets = {588, 652, 142, 144, -765, -812, 313, 539, -274, -526};
-    static constexpr std::array cheap_turns = {1454, 1162, 1059, 1118, 691, 852, 1042, 1385, 1195, 701};
+    // Full game length in hundredths of a move across both players.
+    // Both axes follow the God enum order shown by the row labels.
+    static constexpr int matchup_length[10][10] = {
+        {5982, 3950, 4034, 3459, 2588, 2995, 3319, 4178, 2925, 3120}, // Apollo
+        {3950, 4921, 3278, 3654, 2843, 2857, 4438, 4207, 3821, 3214}, // Artemis
+        {4034, 3278, 3351, 3363, 2393, 2534, 3795, 3873, 2592, 2869}, // Athena
+        {3459, 3654, 3363, 3507, 2870, 1824, 3987, 3792, 3144, 2504}, // Atlas
+        {2588, 2843, 2393, 2870, 1724, 1732, 2249, 2701, 1879, 2040}, // Demeter
+        {2995, 2857, 2534, 1824, 1732, 1682, 2401, 2773, 1588, 2164}, // Hephaestus
+        {3319, 4438, 3795, 3987, 2249, 2401, 4517, 3390, 3472, 2226}, // Hermes
+        {4178, 4207, 3873, 3792, 2701, 2773, 3390, 4929, 3317, 2891}, // Minotaur
+        {2925, 3821, 2592, 3144, 1879, 1588, 3472, 3317, 3289, 1899}, // Pan
+        {3120, 3214, 2869, 2504, 2040, 2164, 2226, 2891, 1899, 2476}, // Prometheus
+    };
     const auto& gods = board.get_gods();
-    const int gray = static_cast<int>(gods[0]);
-    const int blue = static_cast<int>(gods[1]);
-    const int expected_moves = center + length_offsets[gray] + length_offsets[blue];
-    // Average the two mirror corrections and keep the half-hundredth until division.
-    const int twice_useful_moves = 2 * expected_moves - cheap_turns[gray] - cheap_turns[blue];
+    const int expected_moves = matchup_length[static_cast<int>(gods[0])][static_cast<int>(gods[1])];
     const auto budget = max_depth ? remaining_time_ms / 13
-        : static_cast<int64_t>(remaining_time_ms) * 400 / twice_useful_moves;
+        : static_cast<int64_t>(remaining_time_ms) * 200 / expected_moves;
     auto thinking_time = std::chrono::milliseconds(budget);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
