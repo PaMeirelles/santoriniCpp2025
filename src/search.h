@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <cstdint>
 #include <vector>
 #include <memory>
 #include <chrono>
@@ -16,6 +17,7 @@
 
 
 namespace Santorini {
+
 
 // Use the correct type alias as defined in your constants/moves headers
 using sq_i = int8_t;
@@ -77,16 +79,18 @@ inline bool is_mate(int score) {
 }
 
 struct SearchResult {
+    int completed_depth = 0;
+    bool timed_out = false;
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int score = 0;
-    long nodes = 0;
+    std::int64_t nodes = 0;
 };
 
 struct SearchInfo {
     Board& board;
     int depth;
     std::chrono::time_point<std::chrono::high_resolution_clock> end_time;
-    long nodes = 0;
+    std::int64_t nodes = 0;
     bool quit = false;
     std::unique_ptr<Moves::Move> bestMove = nullptr;
 
@@ -164,9 +168,9 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOME =
 
 
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
-    auto k1 = k_moves.killers[ply][0];
-    auto k2 = k_moves.killers[ply][1];
-    auto k3 = k_moves.killers[ply][2];
+    auto k1 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][0] : std::nullopt;
+    auto k2 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][1] : std::nullopt;
+    auto k3 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][2] : std::nullopt;
     auto current_god = board.get_current_god();
     for (auto& mv : moves) {
         // Pan's winning move should be scored highly, then we continue to the next move.
@@ -260,7 +264,8 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
 int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
     KillerMoves& k_moves, bool allow_null = true);
 
-inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply) {
+inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves,
+    int ply, int qdepth=0, unsigned visits=0, int credits=1) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -287,6 +292,7 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         }
     }
 
+    int searched=0;
     bool visited_to_sq[25] = {false};
     score_moves(climber_moves, search_info.board, k_moves, ply);
 
@@ -296,9 +302,12 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         if (visited_to_sq[move.to_sq]) {
             continue;
         }
+        unsigned next_visits=visits;
+        int next_credits=credits;
+        ++searched;
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1);
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1,qdepth+1,next_visits,next_credits);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
@@ -529,7 +538,7 @@ inline SearchResult get_best_move(
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int prev_score = 0;
-    long nodes_searched = 0; // To store nodes from last completed iteration
+    std::int64_t nodes_searched = 0; // To store nodes from last completed iteration
     KillerMoves killers;
 
     for (int depth = 1; ; ++depth) {
@@ -547,6 +556,8 @@ inline SearchResult get_best_move(
                 result.best_move = std::move(best_move);
                 result.score = prev_score;
                 result.nodes = nodes_searched;
+                result.completed_depth = depth - 1;
+                result.timed_out = true;
                 return result;
             }
 
@@ -577,6 +588,7 @@ inline SearchResult get_best_move(
             result.best_move = std::move(best_move);
             result.score = prev_score;
             result.nodes = nodes_searched;
+            result.completed_depth = depth;
             return result;
         }
     }
