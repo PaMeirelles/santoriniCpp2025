@@ -43,7 +43,16 @@ inline int get_lmr_reduction(const int depth, const int move_index) {
     if (move_index <= N_PROTECTED_MOVES) {
         return 0;
     }
-    auto reduction = (log2(depth) * log2(move_index)) / LMR_FACTOR;
+    static const auto reductions = [] {
+        std::array<std::array<double, 1024>, 101> values{};
+        for (int d = 1; d <= 100; ++d)
+            for (int m = 3; m < 1024; ++m)
+                values[d][m] = (log2(d) * log2(m)) / LMR_FACTOR;
+        return values;
+    }();
+    auto reduction = depth > 0 && depth <= 100 && move_index < 1024
+        ? reductions[depth][move_index]
+        : (log2(depth) * log2(move_index)) / LMR_FACTOR;
 
     if (depth - reduction < MIN_DEPTH) {
         reduction = depth - MIN_DEPTH;
