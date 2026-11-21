@@ -254,8 +254,12 @@ int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, Tra
 
 constexpr int QSEARCH_MAX_EXTRA_PLIES = 8;
 
+inline bool qsearch_reaches_new_height(const Board& board, const Moves::Move& move, int highest) {
+    return board.get_blocks()[move.to_sq] > highest;
+}
+
 inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply,
-    int qdepth = 0) {
+    int qdepth = 0, int highest_q_height = -1) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -294,9 +298,11 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         if (visited_to_sq[move.to_sq]) {
             continue;
         }
+        if (!qsearch_reaches_new_height(search_info.board, move, highest_q_height)) continue;
+        const int landing_height = search_info.board.get_blocks()[move.to_sq];
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1, qdepth+1);
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1, qdepth+1, landing_height);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
