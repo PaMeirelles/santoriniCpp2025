@@ -40,7 +40,7 @@ const std::array<sq_i, 4>& get_workers() const { return _workers; }
 const std::array<int, 25>& get_workers_map() const { return _workers_map; }
 const std::array<sq_i, 25>& get_blocks() const { return _blocks; }
 int8_t get_turn() const { return _turn; }
-bool is_free(sq_i s) const;
+bool is_free(sq_i s) const { return _blocks[s] < 4 && _workers_map[s] == -1; }
 const std::array<Constants::God, 2>& get_gods() const { return _gods; }
 bool get_prevent_up_next_turn() const { return _prevent_up_next_turn; }
 Constants::God get_current_god() const {return _turn == 1 ? _gods[0] : _gods[1]; }
@@ -154,5 +154,5 @@ friend bool operator<(const Board& lhs, const Board& rhs);
 };
 
 bool operator<(const Board& lhs, const Board& rhs);
-bool adj_ok(sq_i from,sq_i to);
+inline bool adj_ok(sq_i from,sq_i to) { return Constants::ADJACENCY_MATRIX[from][to]; }
 } // namespace Santorini
