@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_12.7.0_Horizon)
+project(Paladini_12.8.0_Horizon)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,11 +18,11 @@ add_library(
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_12.7.0_Horizon src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Paladini_12.8.0_Horizon src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_12.7.0_Horizon
+        Paladini_12.8.0_Horizon
         PRIVATE santorini_engine
 )
 
@@ -68,3 +68,7 @@ target_link_libraries(
 # Discover and add the tests to the CTest runner.
 include(GoogleTest)
 gtest_discover_tests(run_tests)
+
+# Horizon quiescence parameters for this build
+target_compile_definitions(Paladini_12.8.0_Horizon PRIVATE HORIZON_Q_WIDTH=2 HORIZON_Q_PLIES=4)
+target_compile_definitions(santorini_engine PUBLIC HORIZON_Q_WIDTH=2 HORIZON_Q_PLIES=4)

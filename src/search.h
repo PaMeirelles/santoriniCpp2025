@@ -1,7 +1,7 @@
-#include "aura_clock.h"
 #pragma once
 
 #include <iostream>
+#include <cstdint>
 #include <vector>
 #include <memory>
 #include <chrono>
@@ -17,6 +17,7 @@
 
 
 namespace Santorini {
+
 
 // Use the correct type alias as defined in your constants/moves headers
 using sq_i = int8_t;
@@ -44,7 +45,16 @@ inline int get_lmr_reduction(const int depth, const int move_index) {
     if (move_index <= N_PROTECTED_MOVES) {
         return 0;
     }
-    auto reduction = (log2(depth) * log2(move_index)) / LMR_FACTOR;
+    static const auto reductions = [] {
+        std::array<std::array<double, 1024>, 101> values{};
+        for (int d = 1; d <= 100; ++d)
+            for (int m = 3; m < 1024; ++m)
+                values[d][m] = (log2(d) * log2(m)) / LMR_FACTOR;
+        return values;
+    }();
+    auto reduction = depth > 0 && depth <= 100 && move_index < 1024
+        ? reductions[depth][move_index]
+        : (log2(depth) * log2(move_index)) / LMR_FACTOR;
 
     if (depth - reduction < MIN_DEPTH) {
         reduction = depth - MIN_DEPTH;
@@ -69,16 +79,18 @@ inline bool is_mate(int score) {
 }
 
 struct SearchResult {
+    int completed_depth = 0;
+    bool timed_out = false;
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int score = 0;
-    long nodes = 0;
+    std::int64_t nodes = 0;
 };
 
 struct SearchInfo {
     Board& board;
     int depth;
     std::chrono::time_point<std::chrono::high_resolution_clock> end_time;
-    long nodes = 0;
+    std::int64_t nodes = 0;
     bool quit = false;
     std::unique_ptr<Moves::Move> bestMove = nullptr;
 
@@ -252,51 +264,20 @@ inline void pick_move(std::vector<Moves::Move>& moves, size_t start_index) {
 int search(SearchInfo& search_info, int depth, int ply, int alpha, int beta, TranspositionTable& tt,
     KillerMoves& k_moves, bool allow_null = true);
 
-constexpr int QSEARCH_MAX_EXTRA_PLIES = 8;
+#ifndef HORIZON_Q_WIDTH
+#define HORIZON_Q_WIDTH 4
+#endif
+constexpr int QSEARCH_MAX_DESTINATIONS = HORIZON_Q_WIDTH;
+static_assert(QSEARCH_MAX_DESTINATIONS > 0);
 
-// Only the new quiet-defense extension is tied to this worker. Normal
-// baseline climbs remain unchanged if its partner takes over the climbing line.
-inline bool qsearch_defender_turn(const Board& board, int aggressor, bool active) {
-    return active && aggressor >= 0 && ((aggressor < 2) != (board.get_turn() == 1));
-}
+#ifndef HORIZON_Q_PLIES
+#define HORIZON_Q_PLIES 4
+#endif
+constexpr int QSEARCH_MAX_EXTRA_PLIES = HORIZON_Q_PLIES;
+static_assert(QSEARCH_MAX_EXTRA_PLIES > 0);
 
-inline bool qsearch_has_block_target(const Board& board, int aggressor) {
-    // Displacement can change which local targets matter; defer to the move test.
-    auto god = board.get_current_god();
-    if (god == Constants::God::APOLLO || god == Constants::God::MINOTAUR) return true;
-    const auto square = board.get_workers()[aggressor];
-    const int height = board.get_blocks()[square];
-    for (auto target : Constants::NEIGHBOURS[square]) {
-        if (board.get_blocks()[target] == height + 1) return true;
-    }
-    return false;
-}
-
-// Legal quiet moves only. Project the worker displacement and at most two
-// builds without make/unmake, evaluation, or another tactical search.
-inline bool qsearch_blocks_aggressor(const Board& board, const Moves::Move& move, int aggressor) {
-    int square = board.get_workers()[aggressor];
-    if (move.to_sq == square) {
-        if (move.god == Constants::God::APOLLO) square = move.from_sq;
-        else if (move.god == Constants::God::MINOTAUR) square = 2 * move.to_sq - move.from_sq;
-    }
-    const int height = board.get_blocks()[square];
-    auto blocks = [&](int target, int increments, bool dome) {
-        const int before = board.get_blocks()[target];
-        const int after = dome ? 4 : before + increments;
-        return adj_ok(square, target) && before == height + 1 && before < 4 &&
-            (after > height + 1 || after == 4);
-    };
-    const bool extra = move.extra_build_sq.has_value();
-    const bool same = extra && *move.extra_build_sq == move.build_sq;
-    return blocks(move.build_sq, same ? 2 : 1, move.dome) ||
-        (extra && !same && blocks(*move.extra_build_sq, 1, false));
-}
-
-
-
-inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply,
-    int qdepth = 0, int aggressor = -1, bool defense_active = true) {
+inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves,
+    int ply, int qdepth=0, unsigned visits=0, int credits=1) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -313,24 +294,18 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
 
     auto climber_moves = search_info.board.generate_climber_moves();
 
+    if (climber_moves.empty()) {
+        return stand_pat;
+    }
+
     for (const auto& move : climber_moves) {
         if (move.winning) {
             return MATE - ply;
         }
     }
 
-    // Preserve the existing immediate-win scan at the cap; only recursion ends.
-    if (qdepth >= QSEARCH_MAX_EXTRA_PLIES) return climber_moves.empty() ? stand_pat : alpha;
-
-    if (qsearch_defender_turn(search_info.board, aggressor, defense_active) &&
-        qsearch_has_block_target(search_info.board, aggressor)) {
-        for (const auto& move : search_info.board.generate_quiet_moves()) {
-            if (qsearch_blocks_aggressor(search_info.board, move, aggressor))
-                climber_moves.push_back(move);
-        }
-    }
-    if (climber_moves.empty()) return stand_pat;
-
+    if(qdepth>=QSEARCH_MAX_EXTRA_PLIES) return alpha;
+    int searched=0;
     bool visited_to_sq[25] = {false};
     score_moves(climber_moves, search_info.board, k_moves, ply);
 
@@ -340,13 +315,13 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         if (visited_to_sq[move.to_sq]) {
             continue;
         }
-        const int worker = search_info.board.get_workers_map()[move.from_sq];
-        const int next_aggressor = aggressor < 0 ? worker : aggressor;
-        const bool next_defense_active = defense_active &&
-            !((worker < 2) == (next_aggressor < 2) && worker != next_aggressor);
+        unsigned next_visits=visits;
+        int next_credits=credits;
+        if(searched>=QSEARCH_MAX_DESTINATIONS) break;
+        ++searched;
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1, qdepth+1, next_aggressor, next_defense_active);
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1,qdepth+1,next_visits,next_credits);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
@@ -570,18 +545,14 @@ inline SearchResult get_best_move(
     Board& board,
     int remaining_time_ms,
     TranspositionTable& tt,
-    std::optional<int> max_depth = std::nullopt,
-    std::optional<int> elapsed_plies = std::nullopt)
+    std::optional<int> max_depth = std::nullopt)
 {
-    if (!max_depth && !elapsed_plies) throw std::invalid_argument("Aura requires elapsed ply");
-    const int budget = max_depth ? remaining_time_ms / 10
-                                 : AuraClock::budget_ms(remaining_time_ms, *elapsed_plies);
-    auto thinking_time = std::chrono::milliseconds(budget);
+    auto thinking_time = std::chrono::milliseconds(remaining_time_ms / 10);
     auto end_time = std::chrono::high_resolution_clock::now() + thinking_time;
 
     std::unique_ptr<Moves::Move> best_move = nullptr;
     int prev_score = 0;
-    long nodes_searched = 0; // To store nodes from last completed iteration
+    std::int64_t nodes_searched = 0; // To store nodes from last completed iteration
     KillerMoves killers;
 
     for (int depth = 1; ; ++depth) {
@@ -599,6 +570,8 @@ inline SearchResult get_best_move(
                 result.best_move = std::move(best_move);
                 result.score = prev_score;
                 result.nodes = nodes_searched;
+                result.completed_depth = depth - 1;
+                result.timed_out = true;
                 return result;
             }
 
@@ -629,6 +602,7 @@ inline SearchResult get_best_move(
             result.best_move = std::move(best_move);
             result.score = prev_score;
             result.nodes = nodes_searched;
+            result.completed_depth = depth;
             return result;
         }
     }
