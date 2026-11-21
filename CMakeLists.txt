@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Paladini_12.3.0_Horizon)
+project(Paladini_12.4.0_Horizon)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,11 +18,11 @@ add_library(
 # # MAIN EXECUTABLE
 # # This is your main application.
 # ############################################################################
-add_executable(Paladini_12.3.0_Horizon src/main.cpp src/board.cpp src/moves.cpp)
+add_executable(Paladini_12.4.0_Horizon src/main.cpp src/board.cpp src/moves.cpp)
 
 # Link the main executable against the engine library.
 target_link_libraries(
-        Paladini_12.3.0_Horizon
+        Paladini_12.4.0_Horizon
         PRIVATE santorini_engine
 )
 

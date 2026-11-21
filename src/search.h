@@ -267,8 +267,47 @@ inline bool qsearch_reaches_new_height(const Board& board, const Moves::Move& mo
     return board.get_blocks()[move.to_sq] > highest;
 }
 
+// Only the new quiet-defense extension is tied to this worker. Normal Horizon
+// 12.3 climbs remain unchanged if its partner takes over the climbing line.
+inline bool qsearch_defender_turn(const Board& board, int aggressor, bool active) {
+    return active && aggressor >= 0 && ((aggressor < 2) != (board.get_turn() == 1));
+}
+
+inline bool qsearch_has_block_target(const Board& board, int aggressor) {
+    // Displacement can change which local targets matter; defer to the move test.
+    auto god = board.get_current_god();
+    if (god == Constants::God::APOLLO || god == Constants::God::MINOTAUR) return true;
+    const auto square = board.get_workers()[aggressor];
+    const int height = board.get_blocks()[square];
+    for (auto target : Constants::NEIGHBOURS[square]) {
+        if (board.get_blocks()[target] == height + 1) return true;
+    }
+    return false;
+}
+
+// Legal quiet moves only. Project the worker displacement and at most two
+// builds without make/unmake, evaluation, or another tactical search.
+inline bool qsearch_blocks_aggressor(const Board& board, const Moves::Move& move, int aggressor) {
+    int square = board.get_workers()[aggressor];
+    if (move.to_sq == square) {
+        if (move.god == Constants::God::APOLLO) square = move.from_sq;
+        else if (move.god == Constants::God::MINOTAUR) square = 2 * move.to_sq - move.from_sq;
+    }
+    const int height = board.get_blocks()[square];
+    auto blocks = [&](int target, int increments, bool dome) {
+        const int before = board.get_blocks()[target];
+        const int after = dome ? 4 : before + increments;
+        return adj_ok(square, target) && before == height + 1 && before < 4 &&
+            (after > height + 1 || after == 4);
+    };
+    const bool extra = move.extra_build_sq.has_value();
+    const bool same = extra && *move.extra_build_sq == move.build_sq;
+    return blocks(move.build_sq, same ? 2 : 1, move.dome) ||
+        (extra && !same && blocks(*move.extra_build_sq, 1, false));
+}
+
 inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_moves, int ply,
-    int highest_q_height = -1) {
+    int highest_q_height = -1, int aggressor = -1, bool defense_active = true) {
     search_info.nodes++;
 
     if ((search_info.nodes % CHECK_EVERY) == 0 && std::chrono::high_resolution_clock::now() > search_info.end_time) {
@@ -285,15 +324,20 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
 
     auto climber_moves = search_info.board.generate_climber_moves();
 
-    if (climber_moves.empty()) {
-        return stand_pat;
-    }
-
     for (const auto& move : climber_moves) {
         if (move.winning) {
             return MATE - ply;
         }
     }
+
+    if (qsearch_defender_turn(search_info.board, aggressor, defense_active) &&
+        qsearch_has_block_target(search_info.board, aggressor)) {
+        for (const auto& move : search_info.board.generate_quiet_moves()) {
+            if (qsearch_blocks_aggressor(search_info.board, move, aggressor))
+                climber_moves.push_back(move);
+        }
+    }
+    if (climber_moves.empty()) return stand_pat;
 
     bool visited_to_sq[25] = {false};
     score_moves(climber_moves, search_info.board, k_moves, ply);
@@ -304,13 +348,20 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         if (visited_to_sq[move.to_sq]) {
             continue;
         }
-        if (!qsearch_reaches_new_height(search_info.board, move, highest_q_height)) {
+        const bool climbing = search_info.board.get_blocks()[move.to_sq] >
+            search_info.board.get_blocks()[move.from_sq];
+        if (climbing && !qsearch_reaches_new_height(search_info.board, move, highest_q_height)) {
             continue;
         }
-        const int landing_height = search_info.board.get_blocks()[move.to_sq];
+        const int landing_height = climbing ? search_info.board.get_blocks()[move.to_sq] : highest_q_height;
+        const int worker = search_info.board.get_workers_map()[move.from_sq];
+        const int next_aggressor = aggressor < 0 ? worker : aggressor;
+        const bool next_defense_active = defense_active &&
+            !((worker < 2) == (next_aggressor < 2) && worker != next_aggressor);
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
-        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1, landing_height);
+        int score = -qsearch(search_info, -beta, -alpha, k_moves, ply+1,
+            landing_height, next_aggressor, next_defense_active);
         search_info.board.unmake_move(move);
 
         if (search_info.quit) return 0;
