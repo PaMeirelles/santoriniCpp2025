@@ -363,7 +363,13 @@ namespace Santorini {
       return oc; // Implicit conversion to std::optional<int> works here
     }
 
+  bool Board::is_free(sq_i s) const {
 
+    if (_blocks[s] >= 4) return false;
+
+    return _workers_map[s] == -1;
+
+  }
 
   void Board::_move_worker(sq_i from, sq_i to) {
     auto idx = _workers_map[from];
@@ -449,7 +455,9 @@ namespace Santorini {
 
   }
 
-
+  bool adj_ok(sq_i from, sq_i to) {
+    return Constants::ADJACENCY_MATRIX[from][to];
+  }
 
   std::optional < sq_i > Board::_calculate_push_square(sq_i from_sq, sq_i to_sq) const{
 
