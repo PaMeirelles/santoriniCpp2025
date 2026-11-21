@@ -304,9 +304,11 @@ inline int qsearch(SearchInfo& search_info, int alpha, int beta, KillerMoves& k_
         }
         unsigned next_visits=visits;
         int next_credits=credits;
-        unsigned shift=2u*search_info.board.get_workers_map()[move.from_sq];
-        if(((visits>>shift)&3u)>=2u) continue;
-        next_visits=visits+(1u<<shift);
+        const auto &b=search_info.board;
+        int gain=b.get_blocks()[move.to_sq]-b.get_blocks()[move.from_sq];
+        if(b.get_current_god()==Constants::God::APOLLO && b.get_workers_map()[move.to_sq]>=0) gain=0;
+        if(move.minotaur_pushed) gain+=b.get_blocks()[2*move.to_sq-move.from_sq]-b.get_blocks()[move.to_sq];
+        if(gain<=0) { if(credits<=0) continue;next_credits=credits-1; }
         ++searched;
         search_info.board.make_move(move);
         visited_to_sq[move.to_sq] = true;
