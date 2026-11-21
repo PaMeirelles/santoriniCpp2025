@@ -86,8 +86,43 @@ const Parameters PARAMS(
     /*ph2_power=*/0.95         //
 );
 
-// --- Main Evaluation Function (Logic Unchanged) ---
-inline int score_position(const Board& b, const Parameters& params = PARAMS) {
+using SupportTable = std::array<double, 9>;
+
+inline SupportTable make_support_table(double multiplier, double exponent) {
+    SupportTable table{};
+    for (int count = 0; count < static_cast<int>(table.size()); ++count) {
+        table[count] = power_score(count, multiplier, exponent);
+    }
+    return table;
+}
+
+const struct {
+    SupportTable same_height_0, next_height_0, two_above_0;
+    SupportTable same_height_1, next_height_1, below_1, two_above_1;
+    SupportTable same_height_2, next_height_2, below_2;
+} DEFAULT_SUPPORT = {
+    make_support_table(PARAMS.sh0_mult, PARAMS.sh0_power),
+    make_support_table(PARAMS.nh0_mult, PARAMS.nh0_power),
+    make_support_table(PARAMS.nn0_mult, PARAMS.nn0_power),
+    make_support_table(PARAMS.sh1_mult, PARAMS.sh1_power),
+    make_support_table(PARAMS.nh1_mult, PARAMS.nh1_power),
+    make_support_table(PARAMS.ph1_mult, PARAMS.ph1_power),
+    make_support_table(PARAMS.nn1_mult, PARAMS.nn1_power),
+    make_support_table(PARAMS.sh2_mult, PARAMS.sh2_power),
+    make_support_table(PARAMS.nh2_mult, PARAMS.nh2_power),
+    make_support_table(PARAMS.ph2_mult, PARAMS.ph2_power),
+};
+
+// Custom parameter sets keep the live calculation so callers can change their weights.
+template <bool UseDefaultTable>
+inline int score_position_impl(const Board& b, const Parameters& params) {
+    const auto support_value = [](int count, const SupportTable& table, double multiplier, double exponent) {
+        if constexpr (UseDefaultTable) {
+            return table[count];
+        } else {
+            return power_score(count, multiplier, exponent);
+        }
+    };
     auto score_worker = [&](const int worker_idx) -> int {
         const sq_i square = b.get_workers()[worker_idx];
         const int height = b.get_blocks()[square];
@@ -110,18 +145,18 @@ inline int score_position(const Board& b, const Parameters& params = PARAMS) {
         // Calculate support score using height-specific parameters
         double support = 0.0;
         if (height == 0) {
-            support += power_score(same_h, params.sh0_mult, params.sh0_power);
-            support += power_score(next_h, params.nh0_mult, params.nh0_power);
-            support += power_score(next_next_h, params.nn0_mult, params.nn0_power);
+            support += support_value(same_h, DEFAULT_SUPPORT.same_height_0, params.sh0_mult, params.sh0_power);
+            support += support_value(next_h, DEFAULT_SUPPORT.next_height_0, params.nh0_mult, params.nh0_power);
+            support += support_value(next_next_h, DEFAULT_SUPPORT.two_above_0, params.nn0_mult, params.nn0_power);
         } else if (height == 1) {
-            support += power_score(same_h, params.sh1_mult, params.sh1_power);
-            support += power_score(next_h, params.nh1_mult, params.nh1_power);
-            support += power_score(prev_h, params.ph1_mult, params.ph1_power);
-            support += power_score(next_next_h, params.nn1_mult, params.nn1_power);
+            support += support_value(same_h, DEFAULT_SUPPORT.same_height_1, params.sh1_mult, params.sh1_power);
+            support += support_value(next_h, DEFAULT_SUPPORT.next_height_1, params.nh1_mult, params.nh1_power);
+            support += support_value(prev_h, DEFAULT_SUPPORT.below_1, params.ph1_mult, params.ph1_power);
+            support += support_value(next_next_h, DEFAULT_SUPPORT.two_above_1, params.nn1_mult, params.nn1_power);
         } else if (height == 2) {
-            support += power_score(same_h, params.sh2_mult, params.sh2_power);
-            support += power_score(next_h, params.nh2_mult, params.nh2_power);
-            support += power_score(prev_h, params.ph2_mult, params.ph2_power);
+            support += support_value(same_h, DEFAULT_SUPPORT.same_height_2, params.sh2_mult, params.sh2_power);
+            support += support_value(next_h, DEFAULT_SUPPORT.next_height_2, params.nh2_mult, params.nh2_power);
+            support += support_value(prev_h, DEFAULT_SUPPORT.below_2, params.ph2_mult, params.ph2_power);
         }
 
         return p_score + h_score + static_cast<int>(support);
@@ -133,6 +168,13 @@ inline int score_position(const Board& b, const Parameters& params = PARAMS) {
     const int tempo_score = (b.get_turn() == 1) ? TEMPO : 0;
 
     return p1_score - p2_score + tempo_score;
+}
+
+inline int score_position(const Board& b, const Parameters& params = PARAMS) {
+    if (&params == &PARAMS) {
+        return score_position_impl<true>(b, params);
+    }
+    return score_position_impl<false>(b, params);
 }
 
 } // namespace Santorini
