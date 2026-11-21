@@ -156,9 +156,9 @@ constexpr std::array<std::array<int, 4>, 4> BLOCK_SCORING_DOME =
 
 
 inline void score_moves(std::vector<Moves::Move> &moves, const Board& board, const KillerMoves& k_moves, const int ply) {
-    auto k1 = k_moves.killers[ply][0];
-    auto k2 = k_moves.killers[ply][1];
-    auto k3 = k_moves.killers[ply][2];
+    auto k1 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][0] : std::nullopt;
+    auto k2 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][1] : std::nullopt;
+    auto k3 = ply >= 0 && ply < MAX_PLY ? k_moves.killers[ply][2] : std::nullopt;
     auto current_god = board.get_current_god();
     for (auto& mv : moves) {
         // Pan's winning move should be scored highly, then we continue to the next move.
